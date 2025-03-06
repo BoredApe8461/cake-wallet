@@ -55,6 +55,8 @@ abstract class EVMChainClient {
     }
   }
 
+  String getApiKey() => "/${secrets.nodesAPIKey}";
+
   void setListeners(EthereumAddress userAddress, Function() onNewTransaction) async {
     // _client?.pendingTransactions().listen((transactionHash) async {
     //   final transaction = await _client!.getTransactionByHash(transactionHash);

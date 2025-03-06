@@ -25,6 +25,7 @@ class Node extends HiveObject with Keyable {
     this.useSSL,
     this.trusted = false,
     this.socksProxyAddress,
+    this.usesApiKey = false,
     this.path = '',
     String? uri,
     WalletType? type,
@@ -44,7 +45,8 @@ class Node extends HiveObject with Keyable {
         password = map['password'] as String?,
         useSSL = map['useSSL'] as bool?,
         trusted = map['trusted'] as bool? ?? false,
-        socksProxyAddress = map['socksProxyPort'] as String?;
+        socksProxyAddress = map['socksProxyPort'] as String?,
+        usesApiKey = map['usesApiKey'] as bool? ?? false;
 
   static const typeId = NODE_TYPE_ID;
   static const boxName = 'Nodes';
