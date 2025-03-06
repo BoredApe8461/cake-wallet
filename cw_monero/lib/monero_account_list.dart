@@ -1,8 +1,9 @@
 import 'package:cw_core/monero_amount_format.dart';
+import 'package:cw_core/utils/print_verbose.dart';
 import 'package:mobx/mobx.dart';
 import 'package:cw_core/account.dart';
 import 'package:cw_monero/api/account_list.dart' as account_list;
-import 'package:cw_monero/api/wallet.dart' as monero_wallet;
+import 'package:monero/monero.dart' as monero;
 
 part 'monero_account_list.g.dart';
 
@@ -44,13 +45,12 @@ abstract class MoneroAccountListBase with Store {
   }
 
   List<Account> getAll() => account_list.getAllAccount().map((accountRow) {
-        final accountIndex = accountRow.getId();
-        final balance = monero_wallet.getFullBalance(accountIndex: accountIndex);
+        final balance = monero.SubaddressAccountRow_getUnlockedBalance(accountRow);
 
         return Account(
-          id: accountRow.getId(),
-          label: accountRow.getLabel(),
-          balance: moneroAmountToString(amount: balance),
+          id: monero.SubaddressAccountRow_getRowId(accountRow),
+          label: monero.SubaddressAccountRow_getLabel(accountRow),
+          balance: moneroAmountToString(amount: monero.Wallet_amountFromString(balance)),
         );
       }).toList();
 
@@ -75,7 +75,7 @@ abstract class MoneroAccountListBase with Store {
       _isRefreshing = false;
     } catch (e) {
       _isRefreshing = false;
-      print(e);
+      printV(e);
       rethrow;
     }
   }

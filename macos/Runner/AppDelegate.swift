@@ -2,7 +2,7 @@ import Cocoa
 import FlutterMacOS
 import IOKit.pwr_mgt
 
-@NSApplicationMain
+@main
 class AppDelegate: FlutterAppDelegate {
     override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
@@ -24,7 +24,21 @@ class AppDelegate: FlutterAppDelegate {
                 }
 
                 result(secRandom(count: count))
-
+            case "setMinWindowSize":
+                guard let self = self else {
+                    result(false)
+                    return
+                }
+                if let arguments = call.arguments as? [String: Any],
+                   let width = arguments["width"] as? Double,
+                   let height = arguments["height"] as? Double {
+                    DispatchQueue.main.async {
+                        self.mainFlutterWindow?.minSize = CGSize(width: width, height: height)
+                    }
+                    result(true)
+                } else {
+                    result(false)
+                }
             default:
                 result(FlutterMethodNotImplemented)
             }

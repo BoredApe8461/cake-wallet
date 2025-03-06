@@ -1,4 +1,3 @@
-Monero enhancements
-In-App live status page for the app services
-Add Exolix exchange provider
-Bug fixes and enhancements
+Ledger fixes
+UI enhancements
+Bug fixes

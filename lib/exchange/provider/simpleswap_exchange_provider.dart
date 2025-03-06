@@ -117,7 +117,11 @@ class SimpleSwapExchangeProvider extends ExchangeProvider {
   }
 
   @override
-  Future<Trade> createTrade({required TradeRequest request, required bool isFixedRateMode}) async {
+  Future<Trade> createTrade({
+    required TradeRequest request,
+    required bool isFixedRateMode,
+    required bool isSendAll,
+  }) async {
     final headers = {'Content-Type': 'application/json'};
     final params = {'api_key': apiKey};
     final body = <String, dynamic>{
@@ -125,8 +129,8 @@ class SimpleSwapExchangeProvider extends ExchangeProvider {
       "currency_to": _normalizeCurrency(request.toCurrency),
       "amount": request.fromAmount,
       "fixed": isFixedRateMode,
-      "user_refund_address": request.refundAddress,
-      "address_to": request.toAddress
+      "user_refund_address": _normalizeAddress(request.refundAddress),
+      "address_to": _normalizeAddress(request.toAddress)
     };
     final uri = Uri.https(apiAuthority, createExchangePath, params);
 
@@ -149,6 +153,7 @@ class SimpleSwapExchangeProvider extends ExchangeProvider {
     final payoutAddress = responseJSON['address_to'] as String;
     final settleAddress = responseJSON['user_refund_address'] as String;
     final extraId = responseJSON['extra_id_from'] as String?;
+    final receiveAmount = responseJSON['amount_to'] as String?;
 
     return Trade(
       id: id,
@@ -160,8 +165,10 @@ class SimpleSwapExchangeProvider extends ExchangeProvider {
       extraId: extraId,
       state: TradeState.created,
       amount: request.fromAmount,
+      receiveAmount: receiveAmount ?? request.toAmount,
       payoutAddress: payoutAddress,
       createdAt: DateTime.now(),
+      isSendAll: isSendAll,
     );
   }
 
@@ -229,11 +236,14 @@ class SimpleSwapExchangeProvider extends ExchangeProvider {
       case CryptoCurrency.usdcsol:
         return 'usdcspl';
       case CryptoCurrency.matic:
-        return 'maticerc20';
+        return 'pol';
       case CryptoCurrency.maticpoly:
         return 'matic';
       default:
         return currency.title.toLowerCase();
     }
   }
+
+  String _normalizeAddress(String address) =>
+      address.startsWith('bitcoincash:') ? address.replaceFirst('bitcoincash:', '') : address;
 }

@@ -3,11 +3,24 @@ import 'package:cw_core/sync_status.dart';
 
 String syncStatusTitle(SyncStatus syncStatus) {
   if (syncStatus is SyncingSyncStatus) {
-    return S.current.Blocks_remaining('${syncStatus.blocksLeft}');
+    return syncStatus.blocksLeft == 1
+        ? S.current.block_remaining
+        : S.current.Blocks_remaining('${syncStatus.blocksLeft}');
+  }
+
+  if (syncStatus is SyncedTipSyncStatus) {
+    return S.current.silent_payments_scanned_tip(syncStatus.tip.toString());
   }
 
   if (syncStatus is SyncedSyncStatus) {
     return S.current.sync_status_syncronized;
+  }
+
+  if (syncStatus is FailedSyncStatus) {
+    if (syncStatus.error != null) {
+      return syncStatus.error!;
+    }
+    return S.current.sync_status_failed_connect;
   }
 
   if (syncStatus is NotConnectedSyncStatus) {
@@ -16,10 +29,6 @@ String syncStatusTitle(SyncStatus syncStatus) {
 
   if (syncStatus is AttemptingSyncStatus) {
     return S.current.sync_status_attempting_sync;
-  }
-
-  if (syncStatus is FailedSyncStatus) {
-    return S.current.sync_status_failed_connect;
   }
 
   if (syncStatus is ConnectingSyncStatus) {
@@ -32,6 +41,26 @@ String syncStatusTitle(SyncStatus syncStatus) {
 
   if (syncStatus is LostConnectionSyncStatus) {
     return S.current.sync_status_failed_connect;
+  }
+
+  if (syncStatus is UnsupportedSyncStatus) {
+    return S.current.sync_status_unsupported;
+  }
+
+  if (syncStatus is TimedOutSyncStatus) {
+    return S.current.sync_status_timed_out;
+  }
+
+  if (syncStatus is SyncronizingSyncStatus) {
+    return S.current.sync_status_syncronizing;
+  }
+
+  if (syncStatus is StartingScanSyncStatus) {
+    return S.current.sync_status_starting_scan(syncStatus.beginHeight.toString());
+  }
+
+  if (syncStatus is AttemptingScanSyncStatus) {
+    return S.current.sync_status_attempting_scan;
   }
 
   return '';

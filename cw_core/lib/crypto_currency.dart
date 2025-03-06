@@ -11,7 +11,8 @@ class CryptoCurrency extends EnumerableItem<int> with Serializable<int> implemen
     this.iconPath,
     this.tag,
     this.enabled = false,
-    })
+    this.isPotentialScam = false,
+  })
       : super(title: title, raw: raw);
 
   final String name;
@@ -20,6 +21,7 @@ class CryptoCurrency extends EnumerableItem<int> with Serializable<int> implemen
   final String? iconPath;
   final int decimals;
   final bool enabled;
+  final bool isPotentialScam;
 
   set enabled(bool value) => this.enabled = value;
 
@@ -38,6 +40,8 @@ class CryptoCurrency extends EnumerableItem<int> with Serializable<int> implemen
     CryptoCurrency.trx,
     CryptoCurrency.usdt,
     CryptoCurrency.usdterc20,
+    CryptoCurrency.sol,
+    CryptoCurrency.maticpoly,
     CryptoCurrency.xlm,
     CryptoCurrency.xrp,
     CryptoCurrency.xhv,
@@ -50,7 +54,6 @@ class CryptoCurrency extends EnumerableItem<int> with Serializable<int> implemen
     CryptoCurrency.usdttrc20,
     CryptoCurrency.hbar,
     CryptoCurrency.sc,
-    CryptoCurrency.sol,
     CryptoCurrency.usdc,
     CryptoCurrency.usdcsol,
     CryptoCurrency.zaddr,
@@ -61,7 +64,6 @@ class CryptoCurrency extends EnumerableItem<int> with Serializable<int> implemen
     CryptoCurrency.dcr,
     CryptoCurrency.kmd,
     CryptoCurrency.mana,
-    CryptoCurrency.maticpoly,
     CryptoCurrency.matic,
     CryptoCurrency.mkr,
     CryptoCurrency.near,
@@ -103,6 +105,12 @@ class CryptoCurrency extends EnumerableItem<int> with Serializable<int> implemen
     CryptoCurrency.kaspa,
     CryptoCurrency.digibyte,
     CryptoCurrency.usdtSol,
+    CryptoCurrency.usdcTrc20,
+    CryptoCurrency.tbtc,
+    CryptoCurrency.wow,
+    CryptoCurrency.zano,
+    CryptoCurrency.ton,
+    CryptoCurrency.flip
   ];
 
   static const havenCurrencies = [
@@ -171,11 +179,11 @@ class CryptoCurrency extends EnumerableItem<int> with Serializable<int> implemen
   static const zen = CryptoCurrency(title: 'ZEN', fullName: 'Horizen', raw: 44, name: 'zen', iconPath: 'assets/images/zen_icon.png', decimals: 8);
   static const xvg = CryptoCurrency(title: 'XVG', fullName: 'Verge', raw: 45, name: 'xvg', iconPath: 'assets/images/xvg_icon.png', decimals: 8);
 
-  static const usdcpoly = CryptoCurrency(title: 'USDC', tag: 'POLY', fullName: 'USD Coin', raw: 46, name: 'usdcpoly', iconPath: 'assets/images/usdc_icon.png', decimals: 6);
+  static const usdcpoly = CryptoCurrency(title: 'USDC', tag: 'POL', fullName: 'USD Coin', raw: 46, name: 'usdcpoly', iconPath: 'assets/images/usdc_icon.png', decimals: 6);
   static const dcr = CryptoCurrency(title: 'DCR', fullName: 'Decred', raw: 47, name: 'dcr', iconPath: 'assets/images/dcr_icon.png', decimals: 8);
   static const kmd = CryptoCurrency(title: 'KMD', fullName: 'Komodo', raw: 48, name: 'kmd', iconPath: 'assets/images/kmd_icon.png', decimals: 8);
   static const mana = CryptoCurrency(title: 'MANA', tag: 'ETH', fullName: 'Decentraland', raw: 49, name: 'mana', iconPath: 'assets/images/mana_icon.png', decimals: 18);
-  static const maticpoly = CryptoCurrency(title: 'MATIC', tag: 'POLY', fullName: 'Polygon', raw: 50, name: 'maticpoly', iconPath: 'assets/images/matic_icon.png', decimals: 18);
+  static const maticpoly = CryptoCurrency(title: 'POL', tag: 'POL', fullName: 'Polygon', raw: 50, name: 'maticpoly', iconPath: 'assets/images/matic_icon.png', decimals: 18);
   static const matic = CryptoCurrency(title: 'MATIC', tag: 'ETH', fullName: 'Polygon', raw: 51, name: 'matic', iconPath: 'assets/images/matic_icon.png', decimals: 18);
   static const mkr = CryptoCurrency(title: 'MKR', tag: 'ETH', fullName: 'Maker', raw: 52, name: 'mkr', iconPath: 'assets/images/mkr_icon.png', decimals: 18);
   static const near = CryptoCurrency(title: 'NEAR', fullName: 'NEAR Protocol', raw: 53, name: 'near', iconPath: 'assets/images/near_icon.png', decimals: 24);
@@ -212,12 +220,17 @@ class CryptoCurrency extends EnumerableItem<int> with Serializable<int> implemen
   static const dydx = CryptoCurrency(title: 'DYDX', tag: 'ETH', fullName: 'dYdX', raw: 84, name: 'dydx', iconPath: 'assets/images/dydx_icon.png', decimals: 18);
   static const steth = CryptoCurrency(title: 'STETH', tag: 'ETH', fullName: 'Lido Staked Ethereum', raw: 85, name: 'steth', iconPath: 'assets/images/steth_icon.png', decimals: 18);
   static const banano = CryptoCurrency(title: 'BAN', fullName: 'Banano', raw: 86, name: 'banano', iconPath: 'assets/images/nano_icon.png', decimals: 29);
-  static const usdtPoly = CryptoCurrency(title: 'USDT', tag: 'POLY', fullName: 'Tether USD (PoS)', raw: 87, name: 'usdtpoly', iconPath: 'assets/images/usdt_icon.png', decimals: 6);
-  static const usdcEPoly = CryptoCurrency(title: 'USDC.E', tag: 'POLY', fullName: 'USD Coin (PoS)', raw: 88, name: 'usdcepoly', iconPath: 'assets/images/usdc_icon.png', decimals: 6);
+  static const usdtPoly = CryptoCurrency(title: 'USDT', tag: 'POL', fullName: 'Tether USD (PoS)', raw: 87, name: 'usdtpoly', iconPath: 'assets/images/usdt_icon.png', decimals: 6);
+  static const usdcEPoly = CryptoCurrency(title: 'USDC.E', tag: 'POL', fullName: 'USD Coin (PoS)', raw: 88, name: 'usdcepoly', iconPath: 'assets/images/usdc_icon.png', decimals: 6);
   static const kaspa = CryptoCurrency(title: 'KAS', fullName: 'Kaspa', raw: 89, name: 'kas', iconPath: 'assets/images/kaspa_icon.png', decimals: 8);
   static const digibyte = CryptoCurrency(title: 'DGB', fullName: 'DigiByte', raw: 90, name: 'dgb', iconPath: 'assets/images/digibyte.png', decimals: 8);
   static const usdtSol = CryptoCurrency(title: 'USDT', tag: 'SOL', fullName: 'USDT Tether', raw: 91, name: 'usdtsol', iconPath: 'assets/images/usdt_icon.png', decimals: 6);
-
+  static const usdcTrc20 = CryptoCurrency(title: 'USDC', tag: 'TRX', fullName: 'USDC Coin', raw: 92, name: 'usdctrc20', iconPath: 'assets/images/usdc_icon.png', decimals: 6);
+  static const tbtc = CryptoCurrency(title: 'tBTC', fullName: 'Testnet Bitcoin', raw: 93, name: 'tbtc', iconPath: 'assets/images/tbtc.png', decimals: 8);
+  static const wow = CryptoCurrency(title: 'WOW', fullName: 'Wownero', raw: 94, name: 'wow', iconPath: 'assets/images/wownero_icon.png', decimals: 11);
+  static const ton = CryptoCurrency(title: 'TON', fullName: 'Toncoin', raw: 95, name: 'ton', iconPath: 'assets/images/ton_icon.png', decimals: 8);
+  static const zano = CryptoCurrency(title: 'ZANO', tag: 'ZANO', fullName: 'Zano', raw: 96, name: 'zano', iconPath: 'assets/images/zano_icon.png', decimals: 12);
+  static const flip = CryptoCurrency(title: 'FLIP', tag: 'ETH', fullName: 'Chainflip', raw: 97, name: 'flip', iconPath: 'assets/images/flip_icon.png', decimals: 18);
 
   static final Map<int, CryptoCurrency> _rawCurrencyMap =
     [...all, ...havenCurrencies].fold<Map<int, CryptoCurrency>>(<int, CryptoCurrency>{}, (acc, item) {
@@ -251,16 +264,22 @@ class CryptoCurrency extends EnumerableItem<int> with Serializable<int> implemen
   static CryptoCurrency fromString(String name, {CryptoCurrency? walletCurrency}) {
     try {
       return CryptoCurrency.all.firstWhere((element) =>
-          element.title.toLowerCase() == name &&
+          element.title.toLowerCase() == name.toLowerCase() &&
           (element.tag == null ||
               element.tag == walletCurrency?.title ||
               element.tag == walletCurrency?.tag));
+    } catch (_) {}
+
+    // search by fullName if not found by title:
+    try {
+      return CryptoCurrency.all.firstWhere((element) => element.fullName?.toLowerCase() == name);
     } catch (_) {}
 
     if (CryptoCurrency._nameCurrencyMap[name.toLowerCase()] == null) {
       final s = 'Unexpected token: $name for CryptoCurrency fromString';
       throw  ArgumentError.value(name, 'name', s);
     }
+
     return CryptoCurrency._nameCurrencyMap[name.toLowerCase()]!;
   }
 
@@ -269,7 +288,7 @@ class CryptoCurrency extends EnumerableItem<int> with Serializable<int> implemen
       final s = 'Unexpected token: $name for CryptoCurrency fromFullName';
       throw  ArgumentError.value(name, 'Fullname', s);
     }
-    return CryptoCurrency._fullNameCurrencyMap[name.toLowerCase()]!;
+    return CryptoCurrency._fullNameCurrencyMap[name.split("(").first.trim().toLowerCase()]!;
   }
 
   @override

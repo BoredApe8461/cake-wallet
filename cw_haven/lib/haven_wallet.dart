@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cw_core/crypto_currency.dart';
 import 'package:cw_core/pathForWallet.dart';
 import 'package:cw_core/transaction_priority.dart';
+import 'package:cw_core/utils/print_verbose.dart';
 import 'package:cw_haven/haven_transaction_creation_credentials.dart';
 import 'package:cw_core/monero_amount_format.dart';
 import 'package:cw_haven/haven_transaction_creation_exception.dart';
@@ -10,10 +11,8 @@ import 'package:cw_haven/haven_transaction_info.dart';
 import 'package:cw_haven/haven_wallet_addresses.dart';
 import 'package:cw_core/monero_wallet_utils.dart';
 import 'package:cw_haven/api/structs/pending_transaction.dart';
-import 'package:flutter/foundation.dart';
 import 'package:mobx/mobx.dart';
 import 'package:cw_haven/api/transaction_history.dart' as haven_transaction_history;
-//import 'package:cw_haven/wallet.dart';
 import 'package:cw_haven/api/wallet.dart' as haven_wallet;
 import 'package:cw_haven/api/transaction_history.dart' as transaction_history;
 import 'package:cw_haven/api/monero_output.dart';
@@ -38,9 +37,10 @@ class HavenWallet = HavenWalletBase with _$HavenWallet;
 
 abstract class HavenWalletBase
     extends WalletBase<MoneroBalance, HavenTransactionHistory, HavenTransactionInfo> with Store {
-  HavenWalletBase({required WalletInfo walletInfo})
+  HavenWalletBase({required WalletInfo walletInfo, String? password})
       : balance = ObservableMap.of(getHavenBalance(accountIndex: 0)),
         _isTransactionUpdating = false,
+        _password = password ?? '',
         _hasSyncAfterStartup = false,
         walletAddresses = HavenWalletAddresses(walletInfo),
         syncStatus = NotConnectedSyncStatus(),
@@ -56,6 +56,7 @@ abstract class HavenWalletBase
   }
 
   static const int _autoSaveInterval = 30;
+  final String _password;
 
   @override
   HavenWalletAddresses walletAddresses;
@@ -73,10 +74,12 @@ abstract class HavenWalletBase
 
   @override
   MoneroWalletKeys get keys => MoneroWalletKeys(
+      primaryAddress: haven_wallet.getAddress(accountIndex: 0, addressIndex: 0),
       privateSpendKey: haven_wallet.getSecretSpendKey(),
       privateViewKey: haven_wallet.getSecretViewKey(),
       publicSpendKey: haven_wallet.getPublicSpendKey(),
-      publicViewKey: haven_wallet.getPublicViewKey());
+      publicViewKey: haven_wallet.getPublicViewKey(),
+      passphrase: "");
 
   haven_wallet.SyncListener? _listener;
   ReactionDisposer? _onAccountChangeReaction;
@@ -106,12 +109,12 @@ abstract class HavenWalletBase
   Future<void>? updateBalance() => null;
 
   @override
-  void close() {
+  Future<void> close({bool shouldCleanup = false}) async {
     _listener?.stop();
     _onAccountChangeReaction?.reaction.dispose();
     _autoSaveTimer?.cancel();
   }
-  
+
   @override
   Future<void> connectToNode({required Node node}) async {
     try {
@@ -121,14 +124,15 @@ abstract class HavenWalletBase
           login: node.login,
           password: node.password,
           useSSL: node.useSSL ?? false,
-          isLightWallet: false, // FIXME: hardcoded value
+          isLightWallet: false,
+          // FIXME: hardcoded value
           socksProxyAddress: node.socksProxyAddress);
 
       haven_wallet.setTrustedDaemon(node.trusted);
       syncStatus = ConnectedSyncStatus();
     } catch (e) {
       syncStatus = FailedSyncStatus();
-      print(e);
+      printV(e);
     }
   }
 
@@ -145,7 +149,7 @@ abstract class HavenWalletBase
       _listener?.start();
     } catch (e) {
       syncStatus = FailedSyncStatus();
-      print(e);
+      printV(e);
       rethrow;
     }
   }
@@ -322,7 +326,7 @@ abstract class HavenWalletBase
       await transactionHistory.save();
       _isTransactionUpdating = false;
     } catch (e) {
-      print(e);
+      printV(e);
       _isTransactionUpdating = false;
     }
   }
@@ -401,7 +405,7 @@ abstract class HavenWalletBase
         syncStatus = SyncingSyncStatus(blocksLeft, ptc);
       }
     } catch (e) {
-      print(e.toString());
+      printV(e.toString());
     }
   }
 
@@ -411,7 +415,18 @@ abstract class HavenWalletBase
       _askForUpdateBalance();
       await Future<void>.delayed(Duration(seconds: 1));
     } catch (e) {
-      print(e.toString());
+      printV(e.toString());
     }
   }
+
+  @override
+  String get password => _password;
+
+  @override
+  Future<String> signMessage(String message, {String? address = null}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<bool> verifyMessage(String message, String signature, {String? address = null}) =>
+      throw UnimplementedError();
 }

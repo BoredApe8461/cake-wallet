@@ -1,17 +1,21 @@
 class Routes {
   static const welcome = '/welcome';
+  static const welcomeWallet = '/welcome_create_restore_wallet';
+  static const welcomePage = '/welcome_page';
   static const newWallet = '/new_wallet';
   static const setupPin = '/setup_pin_code';
   static const newWalletFromWelcome = '/new_wallet_from_welcome';
   static const seed = '/seed';
   static const restoreOptions = '/restore_options';
   static const restoreWalletFromSeedKeys = '/restore_wallet_from_seeds_keys';
+  static const restoreWalletFromHardwareWallet = '/restore/hardware_wallet';
   static const restoreWalletTypeFromQR = '/restore_wallet_from_qr_code';
-  static const restoreWalletChooseDerivation =
-      '/restore_wallet_choose_derivation';
+  static const restoreWalletChooseDerivation = '/restore_wallet_choose_derivation';
+  static const chooseHardwareWalletAccount = '/restore/hardware_wallet/accounts';
   static const dashboard = '/dashboard';
   static const send = '/send';
   static const transactionDetails = '/transaction_info';
+  static const bumpFeePage = '/bump_fee_page';
   static const receive = '/receive';
   static const newSubaddress = '/new_subaddress';
   static const walletEdit = '/walletEdit';
@@ -28,6 +32,7 @@ class Routes {
   static const nanoAccountCreation = '/nano_account_new';
   static const addressBook = '/address_book';
   static const pickerAddressBook = '/picker_address_book';
+  static const pickerWalletAddress = '/picker_wallet_address';
   static const addressBookAddContact = '/address_book_add_contact';
   static const showKeys = '/show_keys';
   static const exchangeConfirm = '/exchange_confirm';
@@ -48,6 +53,7 @@ class Routes {
   static const restoreWalletType = '/restore_wallet_type';
   static const restoreWallet = '/restore_wallet';
   static const preSeedPage = '/pre_seed_page';
+  static const transactionSuccessPage = '/transaction_success_info_page';
   static const backup = '/backup';
   static const editBackupPassword = '/edit_backup_passowrd';
   static const restoreFromBackup = '/restore_from_backup';
@@ -56,28 +62,25 @@ class Routes {
   static const supportOtherLinks = '/support/other';
   static const orderDetails = '/order_details';
   static const buySellPage = '/buy_sell_page';
+  static const buyOptionsPage = '/buy_sell_options';
+  static const paymentMethodOptionsPage = '/payment_method_options';
   static const buyWebView = '/buy_web_view';
   static const unspentCoinsList = '/unspent_coins_list';
   static const unspentCoinsDetails = '/unspent_coins_details';
   static const addressPage = '/address_page';
   static const fullscreenQR = '/fullscreen_qr';
-  static const ioniaWelcomePage = '/cake_pay_welcome_page';
-  static const ioniaCreateAccountPage = '/cake_pay_create_account_page';
-  static const ioniaLoginPage = '/cake_pay_login_page';
-  static const ioniaManageCardsPage = '/manage_cards_page';
-  static const ioniaBuyGiftCardPage = '/buy_gift_card_page';
-  static const ioniaBuyGiftCardDetailPage = '/buy_gift_card_detail_page';
-  static const ioniaVerifyIoniaOtpPage = '/cake_pay_verify_otp_page';
-  static const ioniaDebitCardPage = '/debit_card_page';
-  static const ioniaActivateDebitCardPage = '/activate_debit_card_page';
-  static const ioniaAccountPage = 'ionia_account_page';
-  static const ioniaAccountCardsPage = 'ionia_account_cards_page';
-  static const ioniaCustomTipPage = 'ionia_custom_tip_page';
-  static const ioniaGiftCardDetailPage = '/ionia_gift_card_detail_page';
-  static const ioniaPaymentStatusPage = '/ionia_payment_status_page';
-  static const ioniaMoreOptionsPage = '/ionia_more_options_page';
-  static const ioniaCustomRedeemPage = '/ionia_custom_redeem_page';
+  static const cakePayWelcomePage = '/cake_pay_welcome_page';
+  static const cakePayLoginPage = '/cake_pay_login_page';
+  static const cakePayCardsPage = '/cake_pay_cards_page';
+  static const cakePayBuyCardPage = '/cake_pay_buy_card_page';
+  static const cakePayBuyCardDetailPage = '/cake_pay_buy_card_detail_page';
+  static const cakePayVerifyOtpPage = '/cake_pay_verify_otp_page';
+  static const cakePayAccountPage = '/cake_pay_account_page';
   static const webViewPage = '/web_view_page';
+  static const silentPaymentsSettings = '/silent_payments_settings';
+  static const mwebSettings = '/mweb_settings';
+  static const mwebLogs = '/mweb_logs';
+  static const mwebNode = '/mweb_node';
   static const connectionSync = '/connection_sync_page';
   static const securityBackupPage = '/security_and_backup_page';
   static const privacyPage = '/privacy_page';
@@ -87,6 +90,8 @@ class Routes {
   static const otherSettingsPage = '/other_settings_page';
   static const advancedPrivacySettings = '/advanced_privacy_settings';
   static const sweepingWalletPage = '/sweeping_wallet_page';
+  static const walletPasswordUnlock = '/wallet_password_unlock';
+  static const walletUnlockLoadable = '/wallet_unlock_loadable';
   static const anonPayInvoicePage = '/anon_pay_invoice_page';
   static const anonPayReceivePage = '/anon_pay_receive_page';
   static const anonPayDetailsPage = '/anon_pay_details_page';
@@ -101,9 +106,16 @@ class Routes {
   static const editToken = '/edit_token';
   static const manageNodes = '/manage_nodes';
   static const managePowNodes = '/manage_pow_nodes';
-  static const walletConnectConnectionsListing =
-      '/wallet-connect-connections-listing';
+  static const walletConnectConnectionsListing = '/wallet-connect-connections-listing';
   static const nftDetailsPage = '/nft_details_page';
   static const importNFTPage = '/import_nft_page';
   static const torPage = '/tor_page';
+
+  static const signPage = '/sign_page';
+  static const connectDevices = '/device/connect';
+  static const urqrAnimatedPage = '/urqr/animated_page';
+  static const walletGroupsDisplayPage = '/wallet_groups_display_page';
+  static const walletGroupDescription = '/wallet_group_description';
+  static const walletGroupExistingSeedDescriptionPage = '/wallet_group_existing_seed_description_page';
+  static const walletSeedVerificationPage = '/wallet_seed_verification_page';
 }

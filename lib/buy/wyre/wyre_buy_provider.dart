@@ -14,7 +14,7 @@ import 'package:cake_wallet/.secrets.g.dart' as secrets;
 class WyreBuyProvider extends BuyProvider {
   WyreBuyProvider({required WalletBase wallet, bool isTestEnvironment = false})
       : baseApiUrl = isTestEnvironment ? _baseTestApiUrl : _baseProductApiUrl,
-        super(wallet: wallet, isTestEnvironment: isTestEnvironment);
+        super(wallet: wallet, isTestEnvironment: isTestEnvironment, ledgerVM: null);
 
   static const _baseTestApiUrl = 'https://api.testwyre.com';
   static const _baseProductApiUrl = 'https://api.sendwyre.com';
@@ -41,6 +41,9 @@ class WyreBuyProvider extends BuyProvider {
 
   @override
   String get darkIcon => 'assets/images/robinhood_dark.png';
+
+  @override
+  bool get isAggregator => false;
 
   String get trackUrl => isTestEnvironment ? _trackTestUrl : _trackProductUrl;
 
@@ -147,11 +150,5 @@ class WyreBuyProvider extends BuyProvider {
         amount: amount.toString(),
         receiveAddress: wallet.walletAddresses.address,
         walletId: wallet.id);
-  }
-
-  @override
-  Future<void> launchProvider(BuildContext context, bool? isBuyAction) {
-    // TODO: implement launchProvider
-    throw UnimplementedError();
   }
 }

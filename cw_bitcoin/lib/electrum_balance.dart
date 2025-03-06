@@ -3,8 +3,18 @@ import 'package:cw_bitcoin/bitcoin_amount_format.dart';
 import 'package:cw_core/balance.dart';
 
 class ElectrumBalance extends Balance {
-  const ElectrumBalance({required this.confirmed, required this.unconfirmed, required this.frozen})
-      : super(confirmed, unconfirmed);
+  ElectrumBalance({
+    required this.confirmed,
+    required this.unconfirmed,
+    required this.frozen,
+    this.secondConfirmed = 0,
+    this.secondUnconfirmed = 0,
+  }) : super(
+          confirmed,
+          unconfirmed,
+          secondAvailable: secondConfirmed,
+          secondAdditional: secondUnconfirmed,
+        );
 
   static ElectrumBalance? fromJSON(String? jsonSource) {
     if (jsonSource == null) {
@@ -14,17 +24,22 @@ class ElectrumBalance extends Balance {
     final decoded = json.decode(jsonSource) as Map;
 
     return ElectrumBalance(
-        confirmed: decoded['confirmed'] as int? ?? 0,
-        unconfirmed: decoded['unconfirmed'] as int? ?? 0,
-        frozen: decoded['frozen'] as int? ?? 0);
+      confirmed: decoded['confirmed'] as int? ?? 0,
+      unconfirmed: decoded['unconfirmed'] as int? ?? 0,
+      frozen: decoded['frozen'] as int? ?? 0,
+      secondConfirmed: decoded['secondConfirmed'] as int? ?? 0,
+      secondUnconfirmed: decoded['secondUnconfirmed'] as int? ?? 0,
+    );
   }
 
-  final int confirmed;
-  final int unconfirmed;
+  int confirmed;
+  int unconfirmed;
   final int frozen;
+  int secondConfirmed = 0;
+  int secondUnconfirmed = 0;
 
   @override
-  String get formattedAvailableBalance => bitcoinAmountToString(amount: confirmed - frozen);
+  String get formattedAvailableBalance => bitcoinAmountToString(amount: ((confirmed + unconfirmed) - frozen) );
 
   @override
   String get formattedAdditionalBalance => bitcoinAmountToString(amount: unconfirmed);
@@ -35,6 +50,21 @@ class ElectrumBalance extends Balance {
     return frozenFormatted == '0.0' ? '' : frozenFormatted;
   }
 
-  String toJSON() =>
-      json.encode({'confirmed': confirmed, 'unconfirmed': unconfirmed, 'frozen': frozen});
+  @override
+  String get formattedSecondAvailableBalance => bitcoinAmountToString(amount: secondConfirmed);
+
+  @override
+  String get formattedSecondAdditionalBalance => bitcoinAmountToString(amount: secondUnconfirmed);
+
+  @override
+  String get formattedFullAvailableBalance =>
+      bitcoinAmountToString(amount: (confirmed + unconfirmed) + secondConfirmed - frozen);
+
+  String toJSON() => json.encode({
+        'confirmed': confirmed,
+        'unconfirmed': unconfirmed,
+        'frozen': frozen,
+        'secondConfirmed': secondConfirmed,
+        'secondUnconfirmed': secondUnconfirmed
+      });
 }

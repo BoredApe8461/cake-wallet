@@ -1,13 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:cake_wallet/core/secure_storage.dart';
+import 'package:cake_wallet/entities/get_encryption_key.dart';
+import 'package:cake_wallet/entities/transaction_description.dart';
 import 'package:cake_wallet/themes/theme_list.dart';
+import 'package:cw_core/root_dir.dart';
 import 'package:cake_wallet/utils/device_info.dart';
+import 'package:cw_core/utils/print_verbose.dart';
 import 'package:cw_core/wallet_type.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:archive/archive_io.dart';
@@ -19,12 +22,11 @@ import 'package:cake_wallet/entities/secret_store_key.dart';
 import 'package:cw_core/wallet_info.dart';
 import 'package:cake_wallet/.secrets.g.dart' as secrets;
 import 'package:cake_wallet/wallet_types.g.dart';
-
 import 'package:cake_backup/backup.dart' as cake_backup;
 
 class BackupService {
-  BackupService(
-      this._flutterSecureStorage, this._walletInfoSource, this._keyService, this._sharedPreferences)
+  BackupService(this._secureStorage, this._walletInfoSource, this._transactionDescriptionBox,
+      this._keyService, this._sharedPreferences)
       : _cipher = Cryptography.instance.chacha20Poly1305Aead(),
         _correctWallets = <WalletInfo>[];
 
@@ -34,9 +36,10 @@ class BackupService {
   static const _v2 = 2;
 
   final Cipher _cipher;
-  final FlutterSecureStorage _flutterSecureStorage;
+  final SecureStorage _secureStorage;
   final SharedPreferences _sharedPreferences;
   final Box<WalletInfo> _walletInfoSource;
+  final Box<TransactionDescription> _transactionDescriptionBox;
   final KeyService _keyService;
   List<WalletInfo> _correctWallets;
 
@@ -76,7 +79,7 @@ class BackupService {
 
   Future<Uint8List> _exportBackupV2(String password) async {
     final zipEncoder = ZipFileEncoder();
-    final appDir = await getApplicationDocumentsDirectory();
+    final appDir = await getAppDir();
     final now = DateTime.now();
     final tmpDir = Directory('${appDir.path}/~_BACKUP_TMP');
     final archivePath = '${tmpDir.path}/backup_${now.toString()}.zip';
@@ -85,6 +88,13 @@ class BackupService {
     final preferencesDump = await _exportPreferencesJSON();
     final preferencesDumpFile = File('${tmpDir.path}/~_preferences_dump_TMP');
     final keychainDumpFile = File('${tmpDir.path}/~_keychain_dump_TMP');
+    final transactionDescriptionDumpFile =
+        File('${tmpDir.path}/~_transaction_descriptions_dump_TMP');
+
+    final transactionDescriptionData = _transactionDescriptionBox
+        .toMap()
+        .map((key, value) => MapEntry(key.toString(), value.toJson()));
+    final transactionDescriptionDump = jsonEncode(transactionDescriptionData);
 
     if (tmpDir.existsSync()) {
       tmpDir.deleteSync(recursive: true);
@@ -97,7 +107,15 @@ class BackupService {
       if (entity.path == archivePath || entity.path == tmpDir.path) {
         return;
       }
-
+      final filename = entity.absolute;
+      for (var ignore in ignoreFiles) {
+        final filename = entity.absolute.path;
+        if (filename.endsWith(ignore) && !filename.contains("wallets/")) {
+          printV("ignoring backup file: $filename");
+          return;
+        }
+      }
+      printV("restoring: $filename");
       if (entity.statSync().type == FileSystemEntityType.directory) {
         zipEncoder.addDirectory(Directory(entity.path));
       } else {
@@ -106,8 +124,10 @@ class BackupService {
     });
     await keychainDumpFile.writeAsBytes(keychainDump.toList());
     await preferencesDumpFile.writeAsString(preferencesDump);
+    await transactionDescriptionDumpFile.writeAsString(transactionDescriptionDump);
     await zipEncoder.addFile(preferencesDumpFile, '~_preferences_dump');
     await zipEncoder.addFile(keychainDumpFile, '~_keychain_dump');
+    await zipEncoder.addFile(transactionDescriptionDumpFile, '~_transaction_descriptions_dump');
     zipEncoder.close();
 
     final content = File(archivePath).readAsBytesSync();
@@ -116,49 +136,65 @@ class BackupService {
   }
 
   Future<void> _importBackupV1(Uint8List data, String password, {required String nonce}) async {
-    final appDir = await getApplicationDocumentsDirectory();
+    final appDir = await getAppDir();
     final decryptedData = await _decryptV1(data, password, nonce);
     final zip = ZipDecoder().decodeBytes(decryptedData);
 
-    zip.files.forEach((file) {
+    for (var file in zip.files) {
       final filename = file.name;
 
       if (file.isFile) {
         final content = file.content as List<int>;
         File('${appDir.path}/' + filename)
           ..createSync(recursive: true)
-          ..writeAsBytesSync(content);
+          ..writeAsBytesSync(content, flush: true);
       } else {
         Directory('${appDir.path}/' + filename)..create(recursive: true);
       }
-    });
+    };
 
     await _verifyWallets();
     await _importKeychainDumpV1(password, nonce: nonce);
     await _importPreferencesDump();
   }
 
+  // checked with .endsWith - so this should be the last part of the filename
+  static const ignoreFiles = [
+    "flutter_assets/kernel_blob.bin",
+    "flutter_assets/vm_snapshot_data",
+    "flutter_assets/isolate_snapshot_data",
+    ".lock",
+  ];
+
   Future<void> _importBackupV2(Uint8List data, String password) async {
-    final appDir = await getApplicationDocumentsDirectory();
+    final appDir = await getAppDir();
     final decryptedData = await _decryptV2(data, password);
     final zip = ZipDecoder().decodeBytes(decryptedData);
 
-    zip.files.forEach((file) {
+    outer:
+    for (var file in zip.files) {
       final filename = file.name;
-
+      for (var ignore in ignoreFiles) { 
+        if (filename.endsWith(ignore) && !filename.contains("wallets/")) {
+          printV("ignoring backup file: $filename");
+          continue outer;
+        }
+      }
+      printV("restoring: $filename");
       if (file.isFile) {
         final content = file.content as List<int>;
         File('${appDir.path}/' + filename)
           ..createSync(recursive: true)
-          ..writeAsBytesSync(content);
+          ..writeAsBytesSync(content, flush: true);
       } else {
         Directory('${appDir.path}/' + filename)..create(recursive: true);
       }
-    });
+    };
 
     await _verifyWallets();
     await _importKeychainDumpV2(password);
     await _importPreferencesDump();
+    await _importTransactionDescriptionDump(); // HiveError: Box has already been closed
   }
 
   Future<void> _verifyWallets() async {
@@ -172,7 +208,7 @@ class BackupService {
   }
 
   Future<Box<WalletInfo>> _reloadHiveWalletInfoBox() async {
-    final appDir = await getApplicationDocumentsDirectory();
+    final appDir = await getAppDir();
     await CakeHive.close();
     CakeHive.init(appDir.path);
 
@@ -183,8 +219,31 @@ class BackupService {
     return await CakeHive.openBox<WalletInfo>(WalletInfo.boxName);
   }
 
+  Future<void> _importTransactionDescriptionDump() async {
+    final appDir = await getAppDir();
+    final transactionDescriptionFile = File('${appDir.path}/~_transaction_descriptions_dump');
+
+    if (!transactionDescriptionFile.existsSync()) {
+      return;
+    }
+
+    final jsonData =
+        json.decode(transactionDescriptionFile.readAsStringSync()) as Map<String, dynamic>;
+    final descriptionsMap = jsonData.map((key, value) =>
+        MapEntry(key, TransactionDescription.fromJson(value as Map<String, dynamic>)));
+    var box = _transactionDescriptionBox;
+    if (!box.isOpen) {
+      final transactionDescriptionsBoxKey = 
+        await getEncryptionKey(secureStorage: _secureStorage, forKey: TransactionDescription.boxKey);
+      box = await CakeHive.openBox<TransactionDescription>(
+        TransactionDescription.boxName,
+        encryptionKey: transactionDescriptionsBoxKey);
+      }
+    await box.putAll(descriptionsMap);
+  }
+
   Future<void> _importPreferencesDump() async {
-    final appDir = await getApplicationDocumentsDirectory();
+    final appDir = await getAppDir();
     final preferencesFile = File('${appDir.path}/~_preferences_dump');
 
     if (!preferencesFile.existsSync()) {
@@ -208,9 +267,7 @@ class BackupService {
     final currentFiatCurrency = data[PreferencesKey.currentFiatCurrencyKey] as String?;
     final shouldSaveRecipientAddress = data[PreferencesKey.shouldSaveRecipientAddressKey] as bool?;
     final isAppSecure = data[PreferencesKey.isAppSecureKey] as bool?;
-    final disableBuy = data[PreferencesKey.disableBuyKey] as bool?;
-    final disableSell = data[PreferencesKey.disableSellKey] as bool?;
-    final defaultBuyProvider = data[PreferencesKey.defaultBuyProvider] as int?;
+    final disableTradeOption = data[PreferencesKey.disableTradeOption] as bool?;
     final currentTransactionPriorityKeyLegacy =
         data[PreferencesKey.currentTransactionPriorityKeyLegacy] as int?;
     final currentBitcoinElectrumSererId =
@@ -236,6 +293,7 @@ class BackupService {
     final lookupsUnstoppableDomains = data[PreferencesKey.lookupsUnstoppableDomains] as bool?;
     final lookupsOpenAlias = data[PreferencesKey.lookupsOpenAlias] as bool?;
     final lookupsENS = data[PreferencesKey.lookupsENS] as bool?;
+    final lookupsWellKnown = data[PreferencesKey.lookupsWellKnown] as bool?;
     final syncAll = data[PreferencesKey.syncAllKey] as bool?;
     final syncMode = data[PreferencesKey.syncModeKey] as int?;
     final autoGenerateSubaddressStatus =
@@ -263,19 +321,13 @@ class BackupService {
     if (isAppSecure != null)
       await _sharedPreferences.setBool(PreferencesKey.isAppSecureKey, isAppSecure);
 
-    if (disableBuy != null)
-      await _sharedPreferences.setBool(PreferencesKey.disableBuyKey, disableBuy);
-
-    if (disableSell != null)
-      await _sharedPreferences.setBool(PreferencesKey.disableSellKey, disableSell);
-
-    if (defaultBuyProvider != null)
-      await _sharedPreferences.setInt(PreferencesKey.defaultBuyProvider, defaultBuyProvider);
+    if (disableTradeOption != null)
+      await _sharedPreferences.setBool(PreferencesKey.disableTradeOption, disableTradeOption);
 
     if (currentTransactionPriorityKeyLegacy != null)
       await _sharedPreferences.setInt(
           PreferencesKey.currentTransactionPriorityKeyLegacy, currentTransactionPriorityKeyLegacy);
-    
+
     if (currentBitcoinElectrumSererId != null)
       await _sharedPreferences.setInt(
           PreferencesKey.currentBitcoinElectrumSererIdKey, currentBitcoinElectrumSererId);
@@ -352,6 +404,9 @@ class BackupService {
 
     if (lookupsENS != null) await _sharedPreferences.setBool(PreferencesKey.lookupsENS, lookupsENS);
 
+    if (lookupsWellKnown != null)
+      await _sharedPreferences.setBool(PreferencesKey.lookupsWellKnown, lookupsWellKnown);
+
     if (syncAll != null) await _sharedPreferences.setBool(PreferencesKey.syncAllKey, syncAll);
 
     if (syncMode != null) await _sharedPreferences.setInt(PreferencesKey.syncModeKey, syncMode);
@@ -361,7 +416,7 @@ class BackupService {
 
   Future<void> _importKeychainDumpV1(String password,
       {required String nonce, String keychainSalt = secrets.backupKeychainSalt}) async {
-    final appDir = await getApplicationDocumentsDirectory();
+    final appDir = await getAppDir();
     final keychainDumpFile = File('${appDir.path}/~_keychain_dump');
     final decryptedKeychainDumpFileData =
         await _decryptV1(keychainDumpFile.readAsBytesSync(), '$keychainSalt$password', nonce);
@@ -373,23 +428,21 @@ class BackupService {
     final backupPasswordKey = generateStoreKeyFor(key: SecretStoreKey.backupPassword);
     final backupPassword = keychainJSON[backupPasswordKey] as String;
 
-    await _flutterSecureStorage.delete(key: backupPasswordKey);
-    await _flutterSecureStorage.write(key: backupPasswordKey, value: backupPassword);
+    await _secureStorage.write(key: backupPasswordKey, value: backupPassword);
 
     keychainWalletsInfo.forEach((dynamic rawInfo) async {
       final info = rawInfo as Map<String, dynamic>;
       await importWalletKeychainInfo(info);
     });
 
-    await _flutterSecureStorage.delete(key: pinCodeKey);
-    await _flutterSecureStorage.write(key: pinCodeKey, value: encodedPinCode(pin: decodedPin));
+    await _secureStorage.write(key: pinCodeKey, value: encodedPinCode(pin: decodedPin));
 
     keychainDumpFile.deleteSync();
   }
 
   Future<void> _importKeychainDumpV2(String password,
       {String keychainSalt = secrets.backupKeychainSalt}) async {
-    final appDir = await getApplicationDocumentsDirectory();
+    final appDir = await getAppDir();
     final keychainDumpFile = File('${appDir.path}/~_keychain_dump');
     final decryptedKeychainDumpFileData =
         await _decryptV2(keychainDumpFile.readAsBytesSync(), '$keychainSalt$password');
@@ -401,16 +454,14 @@ class BackupService {
     final backupPasswordKey = generateStoreKeyFor(key: SecretStoreKey.backupPassword);
     final backupPassword = keychainJSON[backupPasswordKey] as String;
 
-    await _flutterSecureStorage.delete(key: backupPasswordKey);
-    await _flutterSecureStorage.write(key: backupPasswordKey, value: backupPassword);
+    await _secureStorage.write(key: backupPasswordKey, value: backupPassword);
 
     keychainWalletsInfo.forEach((dynamic rawInfo) async {
       final info = rawInfo as Map<String, dynamic>;
       await importWalletKeychainInfo(info);
     });
 
-    await _flutterSecureStorage.delete(key: pinCodeKey);
-    await _flutterSecureStorage.write(key: pinCodeKey, value: encodedPinCode(pin: decodedPin));
+    await _secureStorage.write(key: pinCodeKey, value: encodedPinCode(pin: decodedPin));
 
     keychainDumpFile.deleteSync();
   }
@@ -430,7 +481,7 @@ class BackupService {
   Future<Uint8List> _exportKeychainDumpV2(String password,
       {String keychainSalt = secrets.backupKeychainSalt}) async {
     final key = generateStoreKeyFor(key: SecretStoreKey.pinCodePassword);
-    final encodedPin = await _flutterSecureStorage.read(key: key);
+    final encodedPin = await _secureStorage.read(key: key);
     final decodedPin = decodedPinCode(pin: encodedPin!);
     final wallets = await Future.wait(_walletInfoSource.values.map((walletInfo) async {
       return {
@@ -440,7 +491,7 @@ class BackupService {
       };
     }));
     final backupPasswordKey = generateStoreKeyFor(key: SecretStoreKey.backupPassword);
-    final backupPassword = await _flutterSecureStorage.read(key: backupPasswordKey);
+    final backupPassword = await _secureStorage.read(key: backupPasswordKey);
     final data = utf8.encode(
         json.encode({'pin': decodedPin, 'wallets': wallets, backupPasswordKey: backupPassword}));
     final encrypted = await _encryptV2(Uint8List.fromList(data), '$keychainSalt$password');
@@ -460,10 +511,7 @@ class BackupService {
           _sharedPreferences.getString(PreferencesKey.currentFiatCurrencyKey),
       PreferencesKey.shouldSaveRecipientAddressKey:
           _sharedPreferences.getBool(PreferencesKey.shouldSaveRecipientAddressKey),
-      PreferencesKey.disableBuyKey: _sharedPreferences.getBool(PreferencesKey.disableBuyKey),
-      PreferencesKey.disableSellKey: _sharedPreferences.getBool(PreferencesKey.disableSellKey),
-      PreferencesKey.defaultBuyProvider:
-          _sharedPreferences.getInt(PreferencesKey.defaultBuyProvider),
+      PreferencesKey.disableTradeOption: _sharedPreferences.getBool(PreferencesKey.disableTradeOption),
       PreferencesKey.currentPinLength: _sharedPreferences.getInt(PreferencesKey.currentPinLength),
       PreferencesKey.currentTransactionPriorityKeyLegacy:
           _sharedPreferences.getInt(PreferencesKey.currentTransactionPriorityKeyLegacy),
@@ -498,6 +546,8 @@ class BackupService {
           _sharedPreferences.getBool(PreferencesKey.lookupsUnstoppableDomains),
       PreferencesKey.lookupsOpenAlias: _sharedPreferences.getBool(PreferencesKey.lookupsOpenAlias),
       PreferencesKey.lookupsENS: _sharedPreferences.getBool(PreferencesKey.lookupsENS),
+      PreferencesKey.lookupsWellKnown:
+          _sharedPreferences.getBool(PreferencesKey.lookupsWellKnown),
       PreferencesKey.syncModeKey: _sharedPreferences.getInt(PreferencesKey.syncModeKey),
       PreferencesKey.syncAllKey: _sharedPreferences.getBool(PreferencesKey.syncAllKey),
       PreferencesKey.autoGenerateSubaddressStatusKey:

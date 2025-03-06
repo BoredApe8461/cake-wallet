@@ -8,6 +8,7 @@ import 'package:cake_wallet/src/screens/wallet_connect/widgets/message_display_w
 import 'package:cake_wallet/core/wallet_connect/models/connection_model.dart';
 import 'package:cake_wallet/src/screens/wallet_connect/widgets/connection_widget.dart';
 import 'package:cake_wallet/src/screens/wallet_connect/widgets/modals/web3_request_modal.dart';
+import 'package:cw_core/utils/print_verbose.dart';
 import 'package:solana/base58.dart';
 import 'package:solana/solana.dart';
 import 'package:walletconnect_flutter_v2/walletconnect_flutter_v2.dart';
@@ -43,7 +44,7 @@ class SolanaChainServiceImpl implements ChainService {
             SolanaClient(
               rpcUrl: rpcUrl,
               websocketUrl: Uri.parse(webSocketUrl),
-              timeout: const Duration(minutes: 2),
+              timeout: const Duration(minutes: 5),
             ) {
     for (final String event in getEvents()) {
       wallet.registerEventEmitter(chainId: getChainId(), event: event);
@@ -72,7 +73,7 @@ class SolanaChainServiceImpl implements ChainService {
 
   @override
   List<String> getEvents() {
-    return [''];
+    return ['chainChanged', 'accountsChanged'];
   }
 
   Future<String?> requestAuthorization(String? text) async {
@@ -100,8 +101,7 @@ class SolanaChainServiceImpl implements ChainService {
   Future<String> solanaSignTransaction(String topic, dynamic parameters) async {
     log('received solana sign transaction request $parameters');
 
-    final solanaSignTx =
-        SolanaSignTransaction.fromJson(parameters as Map<String, dynamic>);
+    final solanaSignTx = SolanaSignTransaction.fromJson(parameters as Map<String, dynamic>);
 
     final String? authError = await requestAuthorization('Confirm request to sign transaction?');
 
@@ -122,10 +122,13 @@ class SolanaChainServiceImpl implements ChainService {
         return '';
       }
 
-      String signature = sign.signatures.first.toBase58();
+      String signature = await solanaClient.sendAndConfirmTransaction(
+        message: message,
+        signers: [ownerKeyPair!],
+        commitment: Commitment.confirmed,
+      );
 
-      print(signature);
-      print(signature.runtimeType);
+      printV(signature);
 
       bottomSheetService.queueBottomSheet(
         isModalDismissible: true,
@@ -163,7 +166,7 @@ class SolanaChainServiceImpl implements ChainService {
     try {
       sign = await ownerKeyPair?.sign(base58decode(solanaSignMessage.message));
     } catch (e) {
-      print(e);
+      printV(e);
     }
 
     if (sign == null) {

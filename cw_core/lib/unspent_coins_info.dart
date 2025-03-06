@@ -1,10 +1,11 @@
 import 'package:cw_core/hive_type_ids.dart';
+import 'package:cw_core/unspent_comparable_mixin.dart';
 import 'package:hive/hive.dart';
 
 part 'unspent_coins_info.g.dart';
 
 @HiveType(typeId: UnspentCoinsInfo.typeId)
-class UnspentCoinsInfo extends HiveObject {
+class UnspentCoinsInfo extends HiveObject with UnspentComparable {
   UnspentCoinsInfo({
     required this.walletId,
     required this.hash,
@@ -16,7 +17,8 @@ class UnspentCoinsInfo extends HiveObject {
     required this.value,
     this.keyImage = null,
     this.isChange = false,
-    this.accountIndex = 0
+    this.accountIndex = 0,
+    this.isSilentPayment = false,
   });
 
   static const typeId = UNSPENT_COINS_INFO_TYPE_ID;
@@ -49,12 +51,15 @@ class UnspentCoinsInfo extends HiveObject {
 
   @HiveField(8, defaultValue: null)
   String? keyImage;
-  
+
   @HiveField(9, defaultValue: false)
   bool isChange;
 
   @HiveField(10, defaultValue: 0)
   int accountIndex;
+
+  @HiveField(11, defaultValue: false)
+  bool? isSilentPayment;
 
   String get note => noteRaw ?? '';
 

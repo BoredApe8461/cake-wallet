@@ -3,6 +3,7 @@ import 'package:cake_wallet/entities/exchange_api_mode.dart';
 import 'package:cake_wallet/ethereum/ethereum.dart';
 import 'package:cake_wallet/polygon/polygon.dart';
 import 'package:cake_wallet/store/settings_store.dart';
+import 'package:cake_wallet/tron/tron.dart';
 import 'package:cw_core/balance.dart';
 import 'package:cw_core/transaction_history.dart';
 import 'package:cw_core/transaction_info.dart';
@@ -40,9 +41,12 @@ abstract class PrivacySettingsViewModelBase with Store {
 
   bool get isAutoGenerateSubaddressesVisible =>
       _wallet.type == WalletType.monero ||
+      _wallet.type == WalletType.wownero ||
       _wallet.type == WalletType.bitcoin ||
       _wallet.type == WalletType.litecoin ||
       _wallet.type == WalletType.bitcoinCash;
+
+  bool get isMoneroWallet => _wallet.type == WalletType.monero;
 
   @computed
   bool get shouldSaveRecipientAddress => _settingsStore.shouldSaveRecipientAddress;
@@ -54,10 +58,7 @@ abstract class PrivacySettingsViewModelBase with Store {
   bool get isAppSecure => _settingsStore.isAppSecure;
 
   @computed
-  bool get disableBuy => _settingsStore.disableBuy;
-
-  @computed
-  bool get disableSell => _settingsStore.disableSell;
+  bool get disableTradeOption => _settingsStore.disableTradeOption;
 
   @computed
   bool get disableBulletin => _settingsStore.disableBulletin;
@@ -69,7 +70,16 @@ abstract class PrivacySettingsViewModelBase with Store {
   bool get usePolygonScan => _settingsStore.usePolygonScan;
 
   @computed
+  bool get useTronGrid => _settingsStore.useTronGrid;
+
+  @computed
+  bool get useMempoolFeeAPI => _settingsStore.useMempoolFeeAPI;
+
+  @computed
   bool get lookupTwitter => _settingsStore.lookupsTwitter;
+
+  @computed
+  bool get lookupsZanoAlias => _settingsStore.lookupsZanoAlias;
 
   @computed
   bool get looksUpMastodon => _settingsStore.lookupsMastodon;
@@ -86,9 +96,16 @@ abstract class PrivacySettingsViewModelBase with Store {
   @computed
   bool get looksUpENS => _settingsStore.lookupsENS;
 
+  @computed
+  bool get looksUpWellKnown => _settingsStore.lookupsWellKnown;
+
   bool get canUseEtherscan => _wallet.type == WalletType.ethereum;
 
   bool get canUsePolygonScan => _wallet.type == WalletType.polygon;
+
+  bool get canUseTronGrid => _wallet.type == WalletType.tron;
+
+  bool get canUseMempoolFeeAPI => _wallet.type == WalletType.bitcoin;
 
   @action
   void setShouldSaveRecipientAddress(bool value) =>
@@ -104,10 +121,7 @@ abstract class PrivacySettingsViewModelBase with Store {
   void setIsAppSecure(bool value) => _settingsStore.isAppSecure = value;
 
   @action
-  void setDisableBuy(bool value) => _settingsStore.disableBuy = value;
-
-  @action
-  void setDisableSell(bool value) => _settingsStore.disableSell = value;
+  void setDisableTradeOption(bool value) => _settingsStore.disableTradeOption = value;
 
   @action
   void setDisableBulletin(bool value) => _settingsStore.disableBulletin = value;
@@ -116,11 +130,17 @@ abstract class PrivacySettingsViewModelBase with Store {
   void setLookupsTwitter(bool value) => _settingsStore.lookupsTwitter = value;
 
   @action
+  void setLookupsZanoAlias(bool value) => _settingsStore.lookupsZanoAlias = value;
+
+  @action
   void setLookupsMastodon(bool value) => _settingsStore.lookupsMastodon = value;
 
   @action
   void setLookupsENS(bool value) => _settingsStore.lookupsENS = value;
 
+  @action
+  void setLookupsWellKnown(bool value) => _settingsStore.lookupsWellKnown = value;
+  
   @action
   void setLookupsYatService(bool value) => _settingsStore.lookupsYatService = value;
 
@@ -140,5 +160,16 @@ abstract class PrivacySettingsViewModelBase with Store {
   void setUsePolygonScan(bool value) {
     _settingsStore.usePolygonScan = value;
     polygon!.updatePolygonScanUsageState(_wallet, value);
+  }
+
+  @action
+  void setUseTronGrid(bool value) {
+    _settingsStore.useTronGrid = value;
+    tron!.updateTronGridUsageState(_wallet, value);
+  }
+
+  @action
+  void setUseMempoolFeeAPI(bool value) {
+    _settingsStore.useMempoolFeeAPI = value;
   }
 }

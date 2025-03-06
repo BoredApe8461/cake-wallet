@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:collection/collection.dart';
+import 'package:cw_core/utils/print_verbose.dart';
 import 'package:cw_core/wallet_base.dart';
 import 'package:cw_core/monero_wallet_utils.dart';
 import 'package:hive/hive.dart';
@@ -56,7 +57,8 @@ class HavenRestoreWalletFromKeysCredentials extends WalletCredentials {
 class HavenWalletService extends WalletService<
     HavenNewWalletCredentials,
     HavenRestoreWalletFromSeedCredentials,
-    HavenRestoreWalletFromKeysCredentials> {
+    HavenRestoreWalletFromKeysCredentials,
+    HavenNewWalletCredentials> {
   HavenWalletService(this.walletInfoSource);
 
   final Box<WalletInfo> walletInfoSource;
@@ -80,7 +82,7 @@ class HavenWalletService extends WalletService<
       return wallet;
     } catch (e) {
       // TODO: Implement Exception for wallet list service.
-      print('HavenWalletsManager Error: ${e.toString()}');
+      printV('HavenWalletsManager Error: ${e.toString()}');
       rethrow;
     }
   }
@@ -92,7 +94,7 @@ class HavenWalletService extends WalletService<
       return haven_wallet_manager.isWalletExist(path: path);
     } catch (e) {
       // TODO: Implement Exception for wallet list service.
-      print('HavenWalletsManager Error: $e');
+      printV('HavenWalletsManager Error: $e');
       rethrow;
     }
   }
@@ -115,7 +117,7 @@ class HavenWalletService extends WalletService<
 
       if (!isValid) {
         await restoreOrResetWalletFiles(name);
-        wallet.close();
+        wallet.close(shouldCleanup: false);
         return openWallet(name, password);
       }
 
@@ -173,6 +175,11 @@ class HavenWalletService extends WalletService<
   }
 
   @override
+  Future<HavenWallet> restoreFromHardwareWallet(HavenNewWalletCredentials credentials) {
+    throw UnimplementedError("Restoring a Haven wallet from a hardware wallet is not yet supported!");
+  }
+
+  @override
   Future<HavenWallet> restoreFromKeys(
       HavenRestoreWalletFromKeysCredentials credentials, {bool? isTestnet}) async {
     try {
@@ -191,7 +198,7 @@ class HavenWalletService extends WalletService<
       return wallet;
     } catch (e) {
       // TODO: Implement Exception for wallet list service.
-      print('HavenWalletsManager Error: $e');
+      printV('HavenWalletsManager Error: $e');
       rethrow;
     }
   }
@@ -212,7 +219,7 @@ class HavenWalletService extends WalletService<
       return wallet;
     } catch (e) {
       // TODO: Implement Exception for wallet list service.
-      print('HavenWalletsManager Error: $e');
+      printV('HavenWalletsManager Error: $e');
       rethrow;
     }
   }
@@ -246,7 +253,7 @@ class HavenWalletService extends WalletService<
         newFile.writeAsBytesSync(file.readAsBytesSync());
       });
     } catch (e) {
-      print(e.toString());
+      printV(e.toString());
     }
   }
 }

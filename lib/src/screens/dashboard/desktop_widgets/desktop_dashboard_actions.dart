@@ -1,9 +1,9 @@
 import 'package:cake_wallet/di.dart';
 import 'package:cake_wallet/entities/main_actions.dart';
 import 'package:cake_wallet/src/screens/dashboard/desktop_widgets/desktop_action_button.dart';
-import 'package:cake_wallet/src/screens/dashboard/pages/market_place_page.dart';
+import 'package:cake_wallet/src/screens/dashboard/pages/cake_features_page.dart';
 import 'package:cake_wallet/view_model/dashboard/dashboard_view_model.dart';
-import 'package:cake_wallet/view_model/dashboard/market_place_view_model.dart';
+import 'package:cake_wallet/view_model/dashboard/cake_features_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 
@@ -22,11 +22,19 @@ class DesktopDashboardActions extends StatelessWidget {
             children: [
               const SizedBox(height: 16),
               DesktopActionButton(
-                title: MainActions.exchangeAction.name(context),
-                image: MainActions.exchangeAction.image,
-                canShow: MainActions.exchangeAction.canShow?.call(dashboardViewModel),
-                isEnabled: MainActions.exchangeAction.isEnabled?.call(dashboardViewModel),
-                onTap: () async => await MainActions.exchangeAction.onTap(context, dashboardViewModel),
+                title: MainActions.showWalletsAction.name(context),
+                image: MainActions.showWalletsAction.image,
+                canShow: MainActions.showWalletsAction.canShow?.call(dashboardViewModel),
+                isEnabled: MainActions.showWalletsAction.isEnabled?.call(dashboardViewModel),
+                onTap: () async =>
+                    await MainActions.showWalletsAction.onTap(context, dashboardViewModel),
+              ),
+              DesktopActionButton(
+                title: MainActions.swapAction.name(context),
+                image: MainActions.swapAction.image,
+                canShow: MainActions.swapAction.canShow?.call(dashboardViewModel),
+                isEnabled: MainActions.swapAction.isEnabled?.call(dashboardViewModel),
+                onTap: () async => await MainActions.swapAction.onTap(context, dashboardViewModel),
               ),
               Row(
                 children: [
@@ -55,28 +63,19 @@ class DesktopDashboardActions extends StatelessWidget {
                 children: [
                   Expanded(
                     child: DesktopActionButton(
-                      title: MainActions.buyAction.name(context),
-                      image: MainActions.buyAction.image,
-                      canShow: MainActions.buyAction.canShow?.call(dashboardViewModel),
-                      isEnabled: MainActions.buyAction.isEnabled?.call(dashboardViewModel),
-                      onTap: () async => await MainActions.buyAction.onTap(context, dashboardViewModel),
-                    ),
-                  ),
-                  Expanded(
-                    child: DesktopActionButton(
-                      title: MainActions.sellAction.name(context),
-                      image: MainActions.sellAction.image,
-                      canShow: MainActions.sellAction.canShow?.call(dashboardViewModel),
-                      isEnabled: MainActions.sellAction.isEnabled?.call(dashboardViewModel),
-                      onTap: () async => await MainActions.sellAction.onTap(context, dashboardViewModel),
+                      title: MainActions.tradeAction.name(context),
+                      image: MainActions.tradeAction.image,
+                      canShow: MainActions.tradeAction.canShow?.call(dashboardViewModel),
+                      isEnabled: MainActions.tradeAction.isEnabled?.call(dashboardViewModel),
+                      onTap: () async => await MainActions.tradeAction.onTap(context, dashboardViewModel),
                     ),
                   ),
                 ],
               ),
             Expanded(
-              child: MarketPlacePage(
+              child: CakeFeaturesPage(
                 dashboardViewModel: dashboardViewModel,
-                marketPlaceViewModel: getIt.get<MarketPlaceViewModel>(),
+                cakeFeaturesViewModel: getIt.get<CakeFeaturesViewModel>(),
               ),
             ),
             ],

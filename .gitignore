@@ -94,9 +94,12 @@ android/app/key.jks
 **/tool/.evm-secrets-config.json
 **/tool/.ethereum-secrets-config.json
 **/tool/.solana-secrets-config.json
+**/tool/.nano-secrets-config.json
+**/tool/.tron-secrets-config.json
 **/lib/.secrets.g.dart
 **/cw_evm/lib/.secrets.g.dart
 **/cw_solana/lib/.secrets.g.dart
+**/cw_tron/lib/.secrets.g.dart
 
 vendor/
 
@@ -123,7 +126,7 @@ cw_shared_external/ios/External/
 cw_haven/ios/External/
 cw_haven/android/.externalNativeBuild/
 cw_haven/android/.cxx/
-
+cw_zano/ios/External/
 lib/bitcoin/bitcoin.dart
 lib/monero/monero.dart
 lib/haven/haven.dart
@@ -132,6 +135,9 @@ lib/bitcoin_cash/bitcoin_cash.dart
 lib/nano/nano.dart
 lib/polygon/polygon.dart
 lib/solana/solana.dart
+lib/tron/tron.dart
+lib/wownero/wownero.dart
+lib/zano/zano.dart
 
 ios/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_180.png
 ios/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_120.png
@@ -152,6 +158,10 @@ assets/images/app_logo.png
 macos/Runner/Info.plist
 macos/Runner/DebugProfile.entitlements
 macos/Runner/Release.entitlements
+macos/Runner/Runner.entitlements
+lib/core/secure_storage.dart
+
+lib/core/secure_storage.dart
 
 macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_16.png
 macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_32.png
@@ -161,3 +171,14 @@ macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_256.png
 macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_512.png
 macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_1024.png
 macos/Runner/Configs/AppInfo.xcconfig
+
+
+integration_test/playground.dart
+
+# Monero.dart (Monero_C)
+scripts/monero_c
+# iOS generated framework bin
+ios/MoneroWallet.framework/MoneroWallet
+ios/WowneroWallet.framework/WowneroWallet
+ios/ZanoWallet.framework/ZanoWallet
+*_libwallet2_api_c.dylib

@@ -1,15 +1,35 @@
-# Cake Wallet for Mobile and Desktop
+<div align="center">
 
-## Open Source Multi-Currency Wallet
+![logo](.github/assets/Logo_CakeWallet.png)
 
-## Links
+</div>
 
-* Website: https://cakewallet.com
-* App Store (iOS / MacOS): https://cakewallet.com/ios
-* Google Play: https://cakewallet.com/gp
-* F-Droid: https://fdroid.cakelabs.com
-* APK: https://github.com/cake-tech/cake_wallet/releases
-* Linux: https://github.com/cake-tech/cake_wallet/releases
+![devices](.github/assets/devices.png)
+
+<div align="center">
+
+[<img height="42" src=".github/assets/app-store-badge.svg">](https://apps.apple.com/us/app/cake-wallet/id1334702542?platform=iphone)
+[<img height="42" src=".github/assets/google-play-badge.png">](https://play.google.com/store/apps/details?id=com.cakewallet.cake_wallet)
+[<img height="42" src=".github/assets/f-droid-badge.png">](https://fdroid.cakelabs.com)
+[<img height="42" src=".github/assets/mac-store-badge.svg">](https://apps.apple.com/us/app/cake-wallet/id1334702542?platform=mac)
+[<img height="42" src=".github/assets/linux-badge.svg">](https://github.com/cake-tech/cake_wallet/releases)
+
+</div>
+
+# Cake Wallet
+
+[Cake Wallet](https://cakewallet.com) is an open-source, non-custodial, and private multi-currency crypto wallet for Android, iOS, macOS, and Linux.
+
+Cake Wallet includes support for several cryptocurrencies, including:
+* Monero (XMR)
+* Bitcoin (BTC)
+* Ethereum (ETH)
+* Litecoin (LTC)
+* Bitcoin Cash (BCH)
+* Polygon (Pol)
+* Solana (SOL)
+* Nano (XNO)
+* Haven (XHV)
 
 ## Features
 
@@ -24,7 +44,7 @@
 * Create several wallets
 * Select your own custom nodes/servers
 * Address book
-* Backup to external location or iCloud
+* Backup to an external location or iCloud
 * Send to OpenAlias, Unstoppable Domains, Yats, and FIO Crypto Handles
 * Set desired network fee level
 * Store local transaction notes
@@ -78,6 +98,17 @@
 * Google Play: https://play.google.com/store/apps/details?id=com.monero.app
 * F-Droid: https://fdroid.cakelabs.com
 * APK: https://github.com/cake-tech/cake_wallet/releases
+
+### APK Verification
+
+APK releases on GitHub, Accrescent, and F-Droid use the same key. They can easily be verified using [apksigner](https://developer.android.com/tools/apksigner#options-verify) or [AppVerifier](https://github.com/soupslurpr/AppVerifier).
+
+See below for Cake Wallet's SHA-256 signing certificate hash:
+
+```
+com.cakewallet.cake_wallet
+C5:40:53:AB:0F:10:D9:54:17:62:A3:DA:76:65:AE:3D:BA:5E:7C:74:3A:B4:F1:08:A5:34:9D:62:AC:10:6E:F5
+```
 
 # Support
 
@@ -141,7 +172,9 @@ The only parts to be translated, if needed, are the values m and s after the var
 
 4. Add the language to `lib/entities/language_service.dart` under both `supportedLocales` and `localeCountryCode`. Use the name of the language in the local language and in English in parentheses after for `supportedLocales`. Use the [ISO 3166-1 alpha-3 code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-3) for `localeCountryCode`. You must choose one country, so choose the country with the most native speakers of this language or is otherwise best associated with this language.
 
-5. Add a relevant flag to `assets/images/flags/XXXX.png`, replacing XXXX with the 3 digit localeCountryCode. The image must be 42x26 pixels with a 3 pixels of transparent margin on all 4 sides. You can resize the flag with [paint.net](https://www.getpaint.net/) to 36x20 pixels, expand the canvas to 42x26 pixels with the flag anchored in the middle, and then manually delete the 3 pixels on each side to make transparent. Or you can use another program like Photoshop.
+5. Add a relevant flag to `assets/images/flags/XXXX.png`, replacing XXXX with the 3 letters localeCountryCode. The image must be 42x26 pixels with 3 pixels of transparent margin on all 4 sides. You can resize the flag with [paint.net](https://www.getpaint.net/) to 36x20 pixels, expand the canvas to 42x26 pixels with the flag anchored in the middle, and then manually delete the 3 pixels on each side to make it transparent. Or you can use another program like Photoshop.
+
+6. Add the new language code to `tool/utils/translation/translation_constants.dart`
 
 ## Add a new fiat currency
 

@@ -8,8 +8,10 @@ import 'package:cake_wallet/solana/solana.dart';
 import 'package:cake_wallet/store/app_store.dart';
 import 'package:cake_wallet/store/dashboard/fiat_conversion_store.dart';
 import 'package:cake_wallet/store/settings_store.dart';
+import 'package:cake_wallet/tron/tron.dart';
 import 'package:cw_core/crypto_currency.dart';
 import 'package:cw_core/erc20_token.dart';
+import 'package:cw_core/utils/print_verbose.dart';
 import 'package:cw_core/wallet_type.dart';
 import 'package:mobx/mobx.dart';
 
@@ -53,9 +55,17 @@ Future<void> startFiatRateUpdate(
             solana!.getSPLTokenCurrencies(appStore.wallet!).where((element) => element.enabled);
       }
 
+      if (appStore.wallet!.type == WalletType.tron) {
+        currencies =
+            tron!.getTronTokenCurrencies(appStore.wallet!).where((element) => element.enabled);
+      }
 
       if (currencies != null) {
         for (final currency in currencies) {
+          // skip potential scams:
+          if (currency.isPotentialScam) {
+            continue;
+          }
           () async {
             fiatConversionStore.prices[currency] = await FiatConversionService.fetchPrice(
                 crypto: currency,
@@ -65,7 +75,7 @@ Future<void> startFiatRateUpdate(
         }
       }
     } catch (e) {
-      print(e);
+      printV(e);
     }
   };
 

@@ -1,6 +1,7 @@
 import 'package:cake_wallet/core/execution_state.dart';
 import 'package:cake_wallet/entities/qr_scanner.dart';
 import 'package:cake_wallet/store/settings_store.dart';
+import 'package:cw_core/utils/print_verbose.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:hive/hive.dart';
 import 'package:mobx/mobx.dart';
@@ -12,16 +13,15 @@ import 'package:permission_handler/permission_handler.dart';
 
 part 'node_create_or_edit_view_model.g.dart';
 
-class NodeCreateOrEditViewModel = NodeCreateOrEditViewModelBase
-    with _$NodeCreateOrEditViewModel;
+class NodeCreateOrEditViewModel = NodeCreateOrEditViewModelBase with _$NodeCreateOrEditViewModel;
 
 abstract class NodeCreateOrEditViewModelBase with Store {
-  NodeCreateOrEditViewModelBase(
-      this._nodeSource, this._walletType, this._settingsStore)
+  NodeCreateOrEditViewModelBase(this._nodeSource, this._walletType, this._settingsStore)
       : state = InitialExecutionState(),
         connectionState = InitialExecutionState(),
         useSSL = false,
         address = '',
+        path = '',
         port = '',
         login = '',
         password = '',
@@ -34,6 +34,9 @@ abstract class NodeCreateOrEditViewModelBase with Store {
 
   @observable
   String address;
+
+  @observable
+  String path;
 
   @observable
   String port;
@@ -63,9 +66,30 @@ abstract class NodeCreateOrEditViewModelBase with Store {
   bool get isReady => address.isNotEmpty && port.isNotEmpty;
 
   bool get hasAuthCredentials =>
-      _walletType == WalletType.monero || _walletType == WalletType.haven;
+      _walletType == WalletType.monero || _walletType == WalletType.wownero || _walletType == WalletType.haven;
 
   bool get hasTestnetSupport => _walletType == WalletType.bitcoin;
+
+  bool get hasPathSupport {
+    switch (_walletType) {
+      case WalletType.ethereum:
+      case WalletType.polygon:
+      case WalletType.solana:
+      case WalletType.banano:
+      case WalletType.nano:
+      case WalletType.tron:
+        return true;
+      case WalletType.none:
+      case WalletType.monero:
+      case WalletType.wownero:
+      case WalletType.haven:
+      case WalletType.litecoin:
+      case WalletType.bitcoinCash:
+      case WalletType.bitcoin:
+      case WalletType.zano:
+        return false;
+    }
+  }
 
   String get uri {
     var uri = address;
@@ -84,6 +108,7 @@ abstract class NodeCreateOrEditViewModelBase with Store {
   @action
   void reset() {
     address = '';
+    path = '';
     port = '';
     login = '';
     password = '';
@@ -98,6 +123,9 @@ abstract class NodeCreateOrEditViewModelBase with Store {
 
   @action
   void setAddress(String val) => address = val;
+
+  @action
+  void setPath(String val) => path = val;
 
   @action
   void setLogin(String val) => login = val;
@@ -121,6 +149,7 @@ abstract class NodeCreateOrEditViewModelBase with Store {
   Future<void> save({Node? editingNode, bool saveAsCurrent = false}) async {
     final node = Node(
         uri: uri,
+        path: path,
         type: _walletType,
         login: login,
         password: password,
@@ -151,6 +180,7 @@ abstract class NodeCreateOrEditViewModelBase with Store {
   Future<void> connect() async {
     final node = Node(
         uri: uri,
+        path: path,
         type: _walletType,
         login: login,
         password: password,
@@ -183,32 +213,34 @@ abstract class NodeCreateOrEditViewModelBase with Store {
   Future<void> scanQRCodeForNewNode(BuildContext context) async {
     try {
       bool isCameraPermissionGranted =
-      await PermissionHandler.checkPermission(Permission.camera, context);
+          await PermissionHandler.checkPermission(Permission.camera, context);
       if (!isCameraPermissionGranted) return;
-      String code = await presentQRScanner();
+      String? code = await presentQRScanner(context);
+      if (code == null) throw Exception("Unexpected QR code value: aborted");
 
       if (code.isEmpty) {
         throw Exception('Unexpected scan QR code value: value is empty');
       }
 
+      if (!code.contains('://')) code = 'tcp://$code';
+
       final uri = Uri.tryParse(code);
-
-      if (uri == null) {
-        throw Exception('Unexpected scan QR code value: Value is invalid');
+      if (uri == null || uri.host.isEmpty) {
+        throw Exception('Invalid QR code: Unable to parse or missing host.');
       }
 
-      final userInfo = uri.userInfo.split(':');
-   
-      if (userInfo.length < 2) {
-        throw Exception('Unexpected scan QR code value: Value is invalid');
-      }
-
-      final rpcUser = userInfo[0];
-      final rpcPassword = userInfo[1];
+      final userInfo = uri.userInfo;
+      final rpcUser = userInfo.length == 2 ? userInfo[0] : '';
+      final rpcPassword = userInfo.length == 2 ? userInfo[1] : '';
       final ipAddress = uri.host;
-      final port = uri.port.toString();
+      final port = uri.hasPort ? uri.port.toString() : '';
+      final path = uri.path;
+      final queryParams = uri.queryParameters; // Currently not used
+
+      await Future.delayed(Duration(milliseconds: 345));
 
       setAddress(ipAddress);
+      setPath(path);
       setPassword(rpcPassword);
       setLogin(rpcUser);
       setPort(port);

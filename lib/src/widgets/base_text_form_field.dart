@@ -22,6 +22,7 @@ class BaseTextFormField extends StatelessWidget {
       this.enabled = true,
       this.readOnly = false,
       this.enableInteractiveSelection = true,
+      this.obscureText = false,
       this.validator,
       this.textStyle,
       this.placeholderTextStyle,
@@ -29,7 +30,8 @@ class BaseTextFormField extends StatelessWidget {
       this.focusNode,
       this.initialValue,
       this.onSubmit,
-      this.borderWidth = 1.0});
+      this.borderWidth = 1.0,
+      super.key});
 
   final TextEditingController? controller;
   final TextInputType? keyboardType;
@@ -57,6 +59,7 @@ class BaseTextFormField extends StatelessWidget {
   final String? initialValue;
   final double borderWidth;
   final void Function(String)? onSubmit;
+  final bool obscureText;
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +73,7 @@ class BaseTextFormField extends StatelessWidget {
       textInputAction: textInputAction,
       textAlign: textAlign,
       autovalidateMode: autovalidateMode,
+      obscureText: obscureText,
       maxLines: maxLines,
       inputFormatters: inputFormatters,
       enabled: enabled,

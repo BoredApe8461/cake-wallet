@@ -34,6 +34,10 @@ class AmountValidator extends TextValidator {
   late final DecimalAmountValidator decimalAmountValidator;
 
   String? call(String? value) {
+    if (value == null || value.isEmpty) {
+      return S.current.error_text_amount;
+    }
+
     //* Validate for Text(length, symbols, decimals etc)
 
     final textValidation = symbolsAmountValidator(value) ?? decimalAmountValidator(value);
@@ -72,6 +76,8 @@ class DecimalAmountValidator extends TextValidator {
         return '^([0-9]+([.\,][0-9]{1,12})?|[.\,][0-9]{1,12})\$';
       case CryptoCurrency.btc:
         return '^([0-9]+([.\,][0-9]{1,8})?|[.\,][0-9]{1,8})\$';
+      case CryptoCurrency.zano:
+        return '^([0-9]+([.\,][0-9]{1,12})?|[.\,][0-9]{1,18})\$';
       default:
         return '^([0-9]+([.\,][0-9]{1,12})?|[.\,][0-9]{1,12})\$';
     }

@@ -1,3 +1,4 @@
+import 'package:cake_wallet/generated/i18n.dart';
 import 'package:cake_wallet/src/widgets/setting_action_button.dart';
 import 'package:cake_wallet/src/widgets/setting_actions.dart';
 import 'package:cake_wallet/themes/extensions/menu_theme.dart';
@@ -8,7 +9,7 @@ import 'package:cw_core/wallet_type.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 
 class MenuWidget extends StatefulWidget {
-  MenuWidget(this.dashboardViewModel);
+  MenuWidget(this.dashboardViewModel, Key? key);
 
   final DashboardViewModel dashboardViewModel;
 
@@ -34,7 +35,10 @@ class MenuWidgetState extends State<MenuWidget> {
         this.bananoIcon = Image.asset('assets/images/nano_icon.png'),
         this.bitcoinCashIcon = Image.asset('assets/images/bch_icon.png'),
         this.polygonIcon = Image.asset('assets/images/matic_icon.png'),
-        this.solanaIcon = Image.asset('assets/images/sol_icon.png');
+        this.solanaIcon = Image.asset('assets/images/sol_icon.png'),
+        this.tronIcon = Image.asset('assets/images/trx_icon.png'),
+        this.wowneroIcon = Image.asset('assets/images/wownero_icon.png'),
+        this.zanoIcon = Image.asset('assets/images/zano_icon.png');
 
   final largeScreen = 731;
 
@@ -57,6 +61,9 @@ class MenuWidgetState extends State<MenuWidget> {
   Image bananoIcon;
   Image polygonIcon;
   Image solanaIcon;
+  Image tronIcon;
+  Image wowneroIcon;
+  Image zanoIcon;
 
   @override
   void initState() {
@@ -92,7 +99,17 @@ class MenuWidgetState extends State<MenuWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final itemCount = SettingActions.all.length;
+    List<SettingActions> items = List.of(SettingActions.all);
+    if (!widget.dashboardViewModel.hasSilentPayments) {
+      items.removeWhere((element) => element.name(context) == S.of(context).silent_payments_settings);
+    }
+    if (!widget.dashboardViewModel.isMoneroViewOnly) {
+      items.removeWhere((element) => element.name(context) == S.of(context).export_outputs);
+    }
+    if (!widget.dashboardViewModel.hasMweb) {
+      items.removeWhere((element) => element.name(context) == S.of(context).litecoin_mweb_settings);
+    }
+    int itemCount = items.length;
 
     moneroIcon = Image.asset('assets/images/monero_menu.png',
         color: Theme.of(context).extension<CakeMenuTheme>()!.iconColor);
@@ -126,6 +143,7 @@ class MenuWidgetState extends State<MenuWidget> {
                     return Container(
                       height: headerHeight,
                       decoration: BoxDecoration(
+                        borderRadius: BorderRadius.only(bottomLeft: Radius.circular(24)),
                         gradient: LinearGradient(colors: [
                           Theme.of(context).extension<CakeMenuTheme>()!.headerFirstGradientColor,
                           Theme.of(context).extension<CakeMenuTheme>()!.headerSecondGradientColor,
@@ -176,11 +194,11 @@ class MenuWidgetState extends State<MenuWidget> {
 
                   index--;
 
-                  final item = SettingActions.all[index];
-
+                  final item = items[index];
                   final isLastTile = index == itemCount - 1;
 
                   return SettingActionButton(
+                    key: item.key,
                     isLastTile: isLastTile,
                     tileHeight: tileHeight,
                     selectionActive: false,
@@ -192,7 +210,7 @@ class MenuWidgetState extends State<MenuWidget> {
                   );
                 },
                 separatorBuilder: (_, index) => Container(
-                  height: 1,
+                  height: 0,
                   color: Theme.of(context).extension<CakeMenuTheme>()!.dividerColor,
                 ),
                 itemCount: itemCount + 1,
@@ -226,6 +244,12 @@ class MenuWidgetState extends State<MenuWidget> {
         return polygonIcon;
       case WalletType.solana:
         return solanaIcon;
+      case WalletType.tron:
+        return tronIcon;
+      case WalletType.wownero:
+        return wowneroIcon;
+      case WalletType.zano:
+        return zanoIcon;
       default:
         throw Exception('No icon for ${type.toString()}');
     }

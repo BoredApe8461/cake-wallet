@@ -1,10 +1,11 @@
+import 'package:cw_core/unspent_comparable_mixin.dart';
 import 'package:mobx/mobx.dart';
 
 part 'unspent_coins_item.g.dart';
 
 class UnspentCoinsItem = UnspentCoinsItemBase with _$UnspentCoinsItem;
 
-abstract class UnspentCoinsItemBase with Store {
+abstract class UnspentCoinsItemBase with Store, UnspentComparable {
   UnspentCoinsItemBase({
     required this.address,
     required this.amount,
@@ -13,9 +14,10 @@ abstract class UnspentCoinsItemBase with Store {
     required this.note,
     required this.isSending,
     required this.isChange,
-    required this.amountRaw,
+    required this.value,
     required this.vout,
-    required this.keyImage
+    required this.keyImage,
+    required this.isSilentPayment,
   });
 
   @observable
@@ -40,11 +42,14 @@ abstract class UnspentCoinsItemBase with Store {
   bool isChange;
 
   @observable
-  int amountRaw;
+  int value;
 
   @observable
   int vout;
 
   @observable
   String? keyImage;
+
+  @observable
+  bool isSilentPayment;
 }

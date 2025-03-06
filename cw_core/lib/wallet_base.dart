@@ -24,7 +24,7 @@ abstract class WalletBase<BalanceType extends Balance, HistoryType extends Trans
 
   WalletType get type => walletInfo.type;
 
-  CryptoCurrency get currency => currencyForWalletType(type);
+  CryptoCurrency get currency => currencyForWalletType(type, isTestnet: isTestnet);
 
   String get id => walletInfo.id;
 
@@ -46,6 +46,8 @@ abstract class WalletBase<BalanceType extends Balance, HistoryType extends Trans
 
   String? get hexSeed => null;
 
+  String? get passphrase => null;
+
   Object get keys;
 
   WalletAddresses get walletAddresses;
@@ -56,12 +58,16 @@ abstract class WalletBase<BalanceType extends Balance, HistoryType extends Trans
 
   bool get isEnabledAutoGenerateSubaddress => false;
 
+  bool get isHardwareWallet => walletInfo.isHardwareWallet;
+
   Future<void> connectToNode({required Node node});
 
   // there is a default definition here because only coins with a pow node (nano based) need to override this
   Future<void> connectToPowNode({required Node node}) async {}
 
   Future<void> startSync();
+
+  Future<void> stopSync() async {}
 
   Future<PendingTransaction> createTransaction(Object credentials);
 
@@ -77,9 +83,11 @@ abstract class WalletBase<BalanceType extends Balance, HistoryType extends Trans
 
   Future<void> rescan({required int height});
 
-  void close();
+  Future<void> close({bool shouldCleanup = false});
 
   Future<void> changePassword(String password);
+
+  String get password;
 
   Future<void>? updateBalance();
 
@@ -87,7 +95,9 @@ abstract class WalletBase<BalanceType extends Balance, HistoryType extends Trans
 
   Future<void> renameWalletFiles(String newWalletName);
 
-  String signMessage(String message, {String? address = null}) => throw UnimplementedError();
+  Future<String> signMessage(String message, {String? address = null});
 
-  bool? isTestnet;
+  Future<bool> verifyMessage(String message, String signature, {String? address = null});
+
+  bool isTestnet = false;
 }

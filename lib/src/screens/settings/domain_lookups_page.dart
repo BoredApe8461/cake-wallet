@@ -38,13 +38,21 @@ class DomainLookupsPage extends BasePage {
                   value: _privacySettingsViewModel.looksUpUnstoppableDomains,
                   onValueChange: (_, bool value) => _privacySettingsViewModel.setLookupsUnstoppableDomains(value)),
               SettingsSwitcherCell(
-                  title: 'OpenAlias,',
+                  title: 'OpenAlias',
                   value: _privacySettingsViewModel.looksUpOpenAlias,
                   onValueChange: (_, bool value) => _privacySettingsViewModel.setLookupsOpenAlias(value)),
               SettingsSwitcherCell(
                   title: 'Ethereum Name Service',
                   value: _privacySettingsViewModel.looksUpENS,
                   onValueChange: (_, bool value) => _privacySettingsViewModel.setLookupsENS(value)),
+              SettingsSwitcherCell(
+                  title: '.well-known',
+                  value: _privacySettingsViewModel.looksUpWellKnown,
+                  onValueChange: (_, bool value) => _privacySettingsViewModel.setLookupsWellKnown(value)),
+              SettingsSwitcherCell(
+                  title: 'Zano Aliases',
+                  value: _privacySettingsViewModel.lookupsZanoAlias,
+                  onValueChange: (_, bool value) => _privacySettingsViewModel.setLookupsZanoAlias(value)),
 
               //if (!isHaven) it does not work correctly
             ],

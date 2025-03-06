@@ -1,1 +1,5 @@
-Bug fixes and enhancements
+Zano enhancements
+Ethereum enhancements
+Ledger fixes
+UI enhancements
+Bug fixes

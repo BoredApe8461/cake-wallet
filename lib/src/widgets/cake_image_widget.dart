@@ -18,13 +18,14 @@ class CakeImageWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     try {
-      if (imageUrl == null) return _displayOnError!;
+      if (imageUrl == null || imageUrl!.isEmpty) return _displayOnError!;
 
       if (imageUrl!.contains('assets/images')) {
         return Image.asset(
           imageUrl!,
           height: height,
           width: width,
+          errorBuilder: (_, __, ___) => Icon(Icons.error),
         );
       }
 
@@ -33,6 +34,7 @@ class CakeImageWidget extends StatelessWidget {
           imageUrl!,
           height: height,
           width: width,
+          placeholderBuilder: (_) => Icon(Icons.error),
         );
       }
 

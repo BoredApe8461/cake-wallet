@@ -1,11 +1,15 @@
 import 'dart:async';
 
 import 'package:cake_wallet/exchange/exchange_provider_description.dart';
+import 'package:cake_wallet/exchange/provider/chainflip_exchange_provider.dart';
 import 'package:cake_wallet/exchange/provider/changenow_exchange_provider.dart';
 import 'package:cake_wallet/exchange/provider/exchange_provider.dart';
 import 'package:cake_wallet/exchange/provider/exolix_exchange_provider.dart';
+import 'package:cake_wallet/exchange/provider/swaptrade_exchange_provider.dart';
 import 'package:cake_wallet/exchange/provider/sideshift_exchange_provider.dart';
 import 'package:cake_wallet/exchange/provider/simpleswap_exchange_provider.dart';
+import 'package:cake_wallet/exchange/provider/stealth_ex_exchange_provider.dart';
+import 'package:cake_wallet/exchange/provider/thorchain_exchange.provider.dart';
 import 'package:cake_wallet/exchange/provider/trocador_exchange_provider.dart';
 import 'package:cake_wallet/exchange/trade.dart';
 import 'package:cake_wallet/generated/i18n.dart';
@@ -13,6 +17,7 @@ import 'package:cake_wallet/src/screens/exchange_trade/exchange_trade_item.dart'
 import 'package:cake_wallet/store/dashboard/trades_store.dart';
 import 'package:cake_wallet/view_model/send/send_view_model.dart';
 import 'package:cw_core/crypto_currency.dart';
+import 'package:cw_core/utils/print_verbose.dart';
 import 'package:cw_core/wallet_base.dart';
 import 'package:hive/hive.dart';
 import 'package:mobx/mobx.dart';
@@ -46,6 +51,18 @@ abstract class ExchangeTradeViewModelBase with Store {
         break;
       case ExchangeProviderDescription.exolix:
         _provider = ExolixExchangeProvider();
+        break;
+      case ExchangeProviderDescription.swapTrade:
+        _provider = SwapTradeExchangeProvider();
+        break;
+      case ExchangeProviderDescription.stealthEx:
+        _provider = StealthExExchangeProvider();
+        break;
+      case ExchangeProviderDescription.thorChain:
+        _provider = ThorChainExchangeProvider(tradesStore: trades);
+        break;
+      case ExchangeProviderDescription.chainflip:
+        _provider = ChainflipExchangeProvider(tradesStore: trades);
         break;
     }
 
@@ -100,13 +117,21 @@ abstract class ExchangeTradeViewModelBase with Store {
     final output = sendViewModel.outputs.first;
     output.address = trade.inputAddress ?? '';
     output.setCryptoAmount(trade.amount);
+    if (_provider is ThorChainExchangeProvider) output.memo = trade.memo;
+    if (trade.isSendAll == true) output.sendAll = true;
     sendViewModel.selectedCryptoCurrency = trade.from;
-    await sendViewModel.createTransaction();
+    final pendingTransaction = await sendViewModel.createTransaction(provider: _provider);
+    if (_provider is ThorChainExchangeProvider) {
+      trade.id = pendingTransaction?.id ?? '';
+      trades.add(trade);
+    }
   }
 
   @action
   Future<void> _updateTrade() async {
     try {
+      final agreedAmount = tradesStore.trade!.amount;
+      final isSendAll = tradesStore.trade!.isSendAll;
       final updatedTrade = await _provider!.findTradeById(id: trade.id);
 
       if (updatedTrade.createdAt == null && trade.createdAt != null)
@@ -115,42 +140,65 @@ abstract class ExchangeTradeViewModelBase with Store {
       if (updatedTrade.amount.isEmpty) updatedTrade.amount = trade.amount;
 
       trade = updatedTrade;
+      trade.amount = agreedAmount;
+      trade.isSendAll = isSendAll;
 
       _updateItems();
     } catch (e) {
-      print(e.toString());
+      printV(e.toString());
     }
   }
 
   void _updateItems() {
     final tagFrom =
-        tradesStore.trade!.from.tag != null ? '${tradesStore.trade!.from.tag}' + ' ' : '';
+    tradesStore.trade!.from.tag != null ? '${tradesStore.trade!.from.tag}' + ' ' : '';
     final tagTo = tradesStore.trade!.to.tag != null ? '${tradesStore.trade!.to.tag}' + ' ' : '';
     items.clear();
-    items.add(ExchangeTradeItem(
-        title: "${trade.provider.title} ${S.current.id}", data: '${trade.id}', isCopied: true));
+
+    if (trade.provider != ExchangeProviderDescription.thorChain)
+      items.add(
+        ExchangeTradeItem(
+          title: "${trade.provider.title} ${S.current.id}",
+          data: '${trade.id}',
+          isCopied: true,
+        ),
+      );
+
+    items.addAll([
+      ExchangeTradeItem(
+        title: S.current.amount,
+        data: '${trade.amount} ${trade.from}',
+        isCopied: true,
+      ),
+      ExchangeTradeItem(
+        title: S.current.estimated_receive_amount + ':',
+        data: '${tradesStore.trade?.receiveAmount} ${trade.to}',
+        isCopied: true,
+      ),
+      ExchangeTradeItem(
+        title: S.current.send_to_this_address('${tradesStore.trade!.from}', tagFrom) + ':',
+        data: trade.inputAddress ?? '',
+        isCopied: true,
+      ),
+    ]);
 
     if (trade.extraId != null) {
       final title = trade.from == CryptoCurrency.xrp
           ? S.current.destination_tag
           : trade.from == CryptoCurrency.xlm
-              ? S.current.memo
-              : S.current.extra_id;
+          ? S.current.memo
+          : S.current.extra_id;
 
-      items.add(ExchangeTradeItem(title: title, data: '${trade.extraId}', isCopied: false));
+      items.add(ExchangeTradeItem(title: title, data: '${trade.extraId}', isCopied: true));
     }
 
-    items.addAll([
-      ExchangeTradeItem(title: S.current.amount, data: '${trade.amount}', isCopied: true),
+    items.add(
       ExchangeTradeItem(
-          title: S.current.send_to_this_address('${tradesStore.trade!.from}', tagFrom) + ':',
-          data: trade.inputAddress ?? '',
-          isCopied: true),
-      ExchangeTradeItem(
-          title: S.current.arrive_in_this_address('${tradesStore.trade!.to}', tagTo) + ':',
-          data: trade.payoutAddress ?? '',
-          isCopied: true),
-    ]);
+        title: S.current.arrive_in_this_address('${tradesStore.trade!.to}', tagTo) + ':',
+        data: trade.payoutAddress ?? '',
+        isCopied: true,
+      ),
+    );
   }
 
   static bool _checkIfCanSend(TradesStore tradesStore, WalletBase wallet) {
@@ -162,6 +210,10 @@ abstract class ExchangeTradeViewModelBase with Store {
         wallet.currency == CryptoCurrency.maticpoly &&
         tradesStore.trade!.from.tag == CryptoCurrency.maticpoly.tag;
 
+    bool _isTronToken() =>
+        wallet.currency == CryptoCurrency.trx &&
+        tradesStore.trade!.from.tag == CryptoCurrency.trx.title;
+
     bool _isSplToken() =>
         wallet.currency == CryptoCurrency.sol &&
         tradesStore.trade!.from.tag == CryptoCurrency.sol.title;
@@ -170,6 +222,7 @@ abstract class ExchangeTradeViewModelBase with Store {
         tradesStore.trade!.provider == ExchangeProviderDescription.xmrto ||
         _isEthToken() ||
         _isPolygonToken() ||
-        _isSplToken();
+        _isSplToken() ||
+        _isTronToken();
   }
 }

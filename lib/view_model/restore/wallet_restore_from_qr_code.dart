@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cake_wallet/core/seed_validator.dart';
 import 'package:cake_wallet/entities/parse_address_from_domain.dart';
 import 'package:cake_wallet/entities/qr_scanner.dart';
@@ -33,6 +35,15 @@ class WalletRestoreFromQRCode {
     'bitcoincash-wallet': WalletType.bitcoinCash,
     'bitcoincash_wallet': WalletType.bitcoinCash,
     'solana-wallet': WalletType.solana,
+    'tron': WalletType.tron,
+    'tron-wallet': WalletType.tron,
+    'tron_wallet': WalletType.tron,
+    'wownero': WalletType.wownero,
+    'wownero-wallet': WalletType.wownero,
+    'wownero_wallet': WalletType.wownero,
+    'zano': WalletType.zano,
+    'zano-wallet': WalletType.zano,
+    'zano_wallet': WalletType.zano,
   };
 
   static bool _containsAssetSpecifier(String code) => _extractWalletType(code) != null;
@@ -41,6 +52,17 @@ class WalletRestoreFromQRCode {
     final sortedKeys = _walletTypeMap.keys.toList()..sort((a, b) => b.length.compareTo(a.length));
 
     final extracted = sortedKeys.firstWhereOrNull((key) => code.toLowerCase().contains(key));
+
+    if (extracted == null) {
+      // Special case for view-only monero wallet
+      final codeParsed = json.decode(code);
+      if (codeParsed["version"] == 0 &&
+          codeParsed["primaryAddress"] != null &&
+          codeParsed["privateViewKey"] != null &&
+          codeParsed["restoreHeight"] != null) {
+        return WalletType.monero;
+      }
+    }
 
     return _walletTypeMap[extracted];
   }
@@ -54,7 +76,7 @@ class WalletRestoreFromQRCode {
     RegExp _getPattern(int wordCount) =>
         RegExp(r'(?<=\W|^)((?:\w+\s+){' + (wordCount - 1).toString() + r'}\w+)(?=\W|$)');
 
-    List<int> patternCounts = walletType == WalletType.monero ? [25, 16, 14, 13] : [24, 18, 12];
+    final List<int> patternCounts = [12, 13, 14, 16, 18, 24, 25, 26];
 
     for (final count in patternCounts) {
       final pattern = _getPattern(count);
@@ -67,7 +89,8 @@ class WalletRestoreFromQRCode {
   }
 
   static Future<RestoredWallet> scanQRCodeForRestoring(BuildContext context) async {
-    String code = await presentQRScanner();
+    String? code = await presentQRScanner(context);
+    if (code == null) throw Exception("Unexpected scan QR code value: aborted");
     if (code.isEmpty) throw Exception('Unexpected scan QR code value: value is empty');
 
     WalletType? walletType;
@@ -98,10 +121,12 @@ class WalletRestoreFromQRCode {
       queryParameters['seed'] = _extractSeedPhraseFromUrl(code, walletType!);
     }
     if (queryParameters['address'] == null) {
-      queryParameters['address'] = _extractAddressFromUrl(code, walletType!);
+      try {
+        queryParameters['address'] = _extractAddressFromUrl(code, walletType!);
+      } catch (_) {}
     }
 
-    Map<String, dynamic> credentials = {'type': walletType, ...queryParameters};
+    Map<String, dynamic> credentials = {'type': walletType, ...queryParameters, 'raw_qr': code};
 
     credentials['mode'] = _determineWalletRestoreMode(credentials);
 
@@ -129,7 +154,12 @@ class WalletRestoreFromQRCode {
       final seedValue = credentials['seed'] as String;
       final words = SeedValidator.getWordList(type: type, language: 'english');
 
-      if (type == WalletType.monero && Polyseed.isValidSeed(seedValue)) {
+      if ((type == WalletType.monero || type == WalletType.wownero) &&
+          Polyseed.isValidSeed(seedValue)) {
+        return WalletRestoreMode.seed;
+      }
+
+      if ((type == WalletType.monero || type == WalletType.wownero)) {
         return WalletRestoreMode.seed;
       }
 
@@ -180,6 +210,26 @@ class WalletRestoreFromQRCode {
       final privateKey = credentials['private_key'] as String;
       if (privateKey.isEmpty) {
         throw Exception('Unexpected restore mode: private_key');
+      }
+      return WalletRestoreMode.keys;
+    }
+
+    if (type == WalletType.tron && credentials.containsKey('private_key')) {
+      final privateKey = credentials['private_key'] as String;
+      if (privateKey.isEmpty) {
+        throw Exception('Unexpected restore mode: private_key');
+      }
+      return WalletRestoreMode.keys;
+    }
+
+    if (type == WalletType.monero) {
+      final codeParsed = json.decode(credentials['raw_qr'].toString());
+      if (codeParsed["version"] != 0)
+        throw UnimplementedError("Found view-only restore with unsupported version");
+      if (codeParsed["primaryAddress"] == null ||
+          codeParsed["privateViewKey"] == null ||
+          codeParsed["restoreHeight"] == null) {
+        throw UnimplementedError("Missing one or more attributes in the JSON");
       }
       return WalletRestoreMode.keys;
     }

@@ -11,7 +11,11 @@ enum ParseFrom {
   ens,
   contact,
   mastodon,
-  nostr
+  nostr,
+  thorChain,
+  wellKnown,
+  zanoAlias,
+  bip353
 }
 
 class ParsedAddress {
@@ -49,6 +53,17 @@ class ParsedAddress {
       addresses: [address!],
       name: name,
       parseFrom: ParseFrom.unstoppableDomains,
+    );
+  }
+
+  factory ParsedAddress.fetchBip353AddressAddress ({
+    required String address,
+    required String name,
+  }) {
+    return ParsedAddress(
+      addresses: [address],
+      name: name,
+      parseFrom: ParseFrom.bip353,
     );
   }
 
@@ -130,6 +145,30 @@ class ParsedAddress {
       parseFrom: ParseFrom.nostr,
       profileImageUrl: profileImageUrl,
       profileName: profileName,
+    );
+  }
+
+  factory ParsedAddress.thorChainAddress({required String address, required String name}) {
+    return ParsedAddress(
+      addresses: [address],
+      name: name,
+      parseFrom: ParseFrom.thorChain,
+    );
+  }
+
+  factory ParsedAddress.zanoAddress({required String address, required String name}) {
+    return ParsedAddress(
+      addresses: [address],
+      name: name,
+      parseFrom: ParseFrom.zanoAlias,
+    );
+  }
+
+  factory ParsedAddress.fetchWellKnownAddress({required String address, required String name}) {
+    return ParsedAddress(
+      addresses: [address],
+      name: name,
+      parseFrom: ParseFrom.wellKnown,
     );
   }
 

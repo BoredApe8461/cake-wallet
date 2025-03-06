@@ -4,23 +4,38 @@ class CWSolana extends Solana {
   @override
   List<String> getSolanaWordList(String language) => SolanaMnemonics.englishWordlist;
 
-  WalletService createSolanaWalletService(Box<WalletInfo> walletInfoSource) =>
-      SolanaWalletService(walletInfoSource);
+  WalletService createSolanaWalletService(Box<WalletInfo> walletInfoSource, bool isDirect) =>
+      SolanaWalletService(walletInfoSource, isDirect);
 
   @override
   WalletCredentials createSolanaNewWalletCredentials({
     required String name,
+    String? mnemonic,
     WalletInfo? walletInfo,
+    String? password,
+    String? passphrase,
   }) =>
-      SolanaNewWalletCredentials(name: name, walletInfo: walletInfo);
+      SolanaNewWalletCredentials(
+        name: name,
+        walletInfo: walletInfo,
+        password: password,
+        mnemonic: mnemonic,
+        passphrase: passphrase,
+      );
 
   @override
   WalletCredentials createSolanaRestoreWalletFromSeedCredentials({
     required String name,
     required String mnemonic,
     required String password,
+    String? passphrase,
   }) =>
-      SolanaRestoreWalletFromSeedCredentials(name: name, password: password, mnemonic: mnemonic);
+      SolanaRestoreWalletFromSeedCredentials(
+        name: name,
+        password: password,
+        mnemonic: mnemonic,
+        passphrase: passphrase,
+      );
 
   @override
   WalletCredentials createSolanaRestoreWalletFromPrivateKey({
@@ -74,8 +89,23 @@ class CWSolana extends Solana {
   }
 
   @override
-  Future<void> addSPLToken(WalletBase wallet, CryptoCurrency token) async =>
-      await (wallet as SolanaWallet).addSPLToken(token as SPLToken);
+  Future<void> addSPLToken(
+    WalletBase wallet,
+    CryptoCurrency token,
+    String contractAddress,
+  ) async {
+    final splToken = SPLToken(
+      name: token.name,
+      symbol: token.title,
+      mintAddress: contractAddress,
+      decimal: token.decimals,
+      mint: token.name.toUpperCase(),
+      enabled: token.enabled,
+      iconPath: token.iconPath,
+    );
+
+    await (wallet as SolanaWallet).addSPLToken(splToken);
+  }
 
   @override
   Future<void> deleteSPLToken(WalletBase wallet, CryptoCurrency token) async =>
@@ -95,8 +125,10 @@ class CWSolana extends Solana {
     }
 
     wallet as SolanaWallet;
-    return wallet.splTokenCurrencies
-        .firstWhere((element) => transaction.tokenSymbol == element.symbol);
+
+    return wallet.splTokenCurrencies.firstWhere(
+      (element) => transaction.tokenSymbol == element.symbol,
+    );
   }
 
   @override
@@ -114,5 +146,15 @@ class CWSolana extends Solana {
     }
 
     return null;
+  }
+
+  @override
+  double? getEstimateFees(WalletBase wallet) {
+    return (wallet as SolanaWallet).estimatedFee;
+  }
+
+  @override
+  List<String> getDefaultTokenContractAddresses() {
+    return DefaultSPLTokens().initialSPLTokens.map((e) => e.mintAddress).toList();
   }
 }

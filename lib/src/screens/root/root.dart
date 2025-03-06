@@ -1,18 +1,18 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:cake_wallet/core/auth_service.dart';
 import 'package:cake_wallet/core/totp_request_details.dart';
-import 'package:cake_wallet/generated/i18n.dart';
-import 'package:cake_wallet/reactions/wallet_connect.dart';
 import 'package:cake_wallet/utils/device_info.dart';
-import 'package:cake_wallet/utils/payment_request.dart';
+import 'package:cake_wallet/view_model/link_view_model.dart';
+import 'package:cw_core/utils/print_verbose.dart';
 import 'package:cw_core/wallet_base.dart';
+import 'package:cw_core/wallet_type.dart';
 import 'package:flutter/material.dart';
 import 'package:cake_wallet/routes.dart';
 import 'package:cake_wallet/src/screens/auth/auth_page.dart';
 import 'package:cake_wallet/store/app_store.dart';
 import 'package:cake_wallet/store/authentication_store.dart';
 import 'package:cake_wallet/entities/qr_scanner.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:mobx/mobx.dart';
 import 'package:uni_links/uni_links.dart';
 import 'package:cake_wallet/src/screens/setup_2fa/setup_2fa_enter_code_page.dart';
@@ -25,6 +25,7 @@ class Root extends StatefulWidget {
     required this.child,
     required this.navigatorKey,
     required this.authService,
+    required this.linkViewModel,
   }) : super(key: key);
 
   final AuthenticationStore authenticationStore;
@@ -32,6 +33,7 @@ class Root extends StatefulWidget {
   final GlobalKey<NavigatorState> navigatorKey;
   final AuthService authService;
   final Widget child;
+  final LinkViewModel linkViewModel;
 
   @override
   RootState createState() => RootState();
@@ -52,7 +54,7 @@ class RootState extends State<Root> with WidgetsBindingObserver {
 
   StreamSubscription<Uri?>? stream;
   ReactionDisposer? _walletReactionDisposer;
-  Uri? launchUri;
+  ReactionDisposer? _deepLinksReactionDisposer;
 
   @override
   void initState() {
@@ -76,6 +78,7 @@ class RootState extends State<Root> with WidgetsBindingObserver {
   void dispose() {
     stream?.cancel();
     _walletReactionDisposer?.call();
+    _deepLinksReactionDisposer?.call();
     super.dispose();
   }
 
@@ -89,14 +92,36 @@ class RootState extends State<Root> with WidgetsBindingObserver {
 
       handleDeepLinking(await getInitialUri());
     } catch (e) {
-      print(e);
+      printV(e);
     }
   }
 
-  void handleDeepLinking(Uri? uri) {
+  void handleDeepLinking(Uri? uri) async {
     if (uri == null || !mounted) return;
 
-    launchUri = uri;
+    widget.linkViewModel.currentLink = uri;
+
+    bool requireAuth = await widget.authService.requireAuth();
+
+    if (!requireAuth && widget.authenticationStore.state == AuthenticationState.allowed) {
+      _navigateToDeepLinkScreen();
+      return;
+    }
+
+    _deepLinksReactionDisposer = reaction(
+      (_) => widget.authenticationStore.state,
+      (AuthenticationState state) {
+        if (state == AuthenticationState.allowed) {
+          if (widget.appStore.wallet == null) {
+            waitForWalletInstance(context);
+          } else {
+            _navigateToDeepLinkScreen();
+          }
+          _deepLinksReactionDisposer?.call();
+          _deepLinksReactionDisposer = null;
+        }
+      },
+    );
   }
 
   @override
@@ -114,9 +139,11 @@ class RootState extends State<Root> with WidgetsBindingObserver {
         break;
       case AppLifecycleState.resumed:
         widget.authService.requireAuth().then((value) {
-          setState(() {
-            _requestAuth = value;
-          });
+          if (mounted) {
+            setState(() {
+              _requestAuth = value;
+            });
+          }
         });
         break;
       default:
@@ -126,6 +153,8 @@ class RootState extends State<Root> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    // this only happens when the app has been in the background for some time
+    // this does NOT trigger when the app is started from the "closed" state!
     if (_isInactive && !_postFrameCallback && _requestAuth) {
       _postFrameCallback = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -134,73 +163,44 @@ class RootState extends State<Root> with WidgetsBindingObserver {
           arguments: (bool isAuthenticatedSuccessfully, AuthPageState auth) {
             if (!isAuthenticatedSuccessfully) {
               return;
+            }
+            final useTotp = widget.appStore.settingsStore.useTOTP2FA;
+            final shouldUseTotp2FAToAccessWallets =
+                widget.appStore.settingsStore.shouldRequireTOTP2FAForAccessingWallet;
+            if (useTotp && shouldUseTotp2FAToAccessWallets) {
+              _reset();
+              auth.close(
+                route: Routes.totpAuthCodePage,
+                arguments: TotpAuthArgumentsModel(
+                  onTotpAuthenticationFinished:
+                      (bool isAuthenticatedSuccessfully, TotpAuthCodePageState totpAuth) {
+                    if (!isAuthenticatedSuccessfully) {
+                      return;
+                    }
+                    _reset();
+                    totpAuth.close(
+                      route: widget.linkViewModel.getRouteToGo(),
+                      arguments: widget.linkViewModel.getRouteArgs(),
+                    );
+                    widget.linkViewModel.currentLink = null;
+                  },
+                  isForSetup: false,
+                  isClosable: false,
+                ),
+              );
             } else {
-              final useTotp = widget.appStore.settingsStore.useTOTP2FA;
-              final shouldUseTotp2FAToAccessWallets =
-                  widget.appStore.settingsStore.shouldRequireTOTP2FAForAccessingWallet;
-              if (useTotp && shouldUseTotp2FAToAccessWallets) {
-                _reset();
-                auth.close(
-                  route: Routes.totpAuthCodePage,
-                  arguments: TotpAuthArgumentsModel(
-                    onTotpAuthenticationFinished:
-                        (bool isAuthenticatedSuccessfully, TotpAuthCodePageState totpAuth) {
-                      if (!isAuthenticatedSuccessfully) {
-                        return;
-                      }
-                      _reset();
-                      totpAuth.close(
-                        route: _getRouteToGo(),
-                        arguments:
-                            isWalletConnectLink ? launchUri : PaymentRequest.fromUri(launchUri),
-                      );
-                      launchUri = null;
-                    },
-                    isForSetup: false,
-                    isClosable: false,
-                  ),
-                );
-              } else {
-                _reset();
-                auth.close(
-                  route: _getRouteToGo(),
-                  arguments: isWalletConnectLink ? launchUri : PaymentRequest.fromUri(launchUri),
-                );
-                launchUri = null;
-              }
+              _reset();
+              auth.close(
+                route: widget.linkViewModel.getRouteToGo(),
+                arguments: widget.linkViewModel.getRouteArgs(),
+              );
+              widget.linkViewModel.currentLink = null;
             }
           },
         );
       });
-    } else if (_isValidPaymentUri()) {
-      if (widget.authenticationStore.state == AuthenticationState.uninitialized) {
-        launchUri = null;
-      } else {
-        if (widget.appStore.wallet == null) {
-          waitForWalletInstance(context, launchUri!);
-          launchUri = null;
-        } else {
-          widget.navigatorKey.currentState?.pushNamed(
-            Routes.send,
-            arguments: PaymentRequest.fromUri(launchUri),
-          );
-          launchUri = null;
-        }
-      }
-      launchUri = null;
-    } else if (isWalletConnectLink) {
-      if (isEVMCompatibleChain(widget.appStore.wallet!.type)) {
-        widget.navigatorKey.currentState?.pushNamed(
-          Routes.walletConnectConnectionsListing,
-          arguments: launchUri,
-        );
-        launchUri = null;
-      } else {
-        _nonETHWalletErrorToast(S.current.switchToEVMCompatibleWallet);
-      }
     }
 
-    launchUri = null;
     return WillPopScope(
       onWillPop: () async => false,
       child: widget.child,
@@ -219,46 +219,14 @@ class RootState extends State<Root> with WidgetsBindingObserver {
     _isInactiveController.add(value);
   }
 
-  bool _isValidPaymentUri() => launchUri?.path.isNotEmpty ?? false;
-
-  bool get isWalletConnectLink => launchUri?.authority == 'wc';
-
-  String? _getRouteToGo() {
-    if (isWalletConnectLink) {
-      if (isEVMCompatibleChain(widget.appStore.wallet!.type)) {
-        _nonETHWalletErrorToast(S.current.switchToEVMCompatibleWallet);
-        return null;
-      }
-      return Routes.walletConnectConnectionsListing;
-    } else if (_isValidPaymentUri()) {
-      return Routes.send;
-    } else {
-      return null;
-    }
-  }
-
-  Future<void> _nonETHWalletErrorToast(String message) async {
-    Fluttertoast.showToast(
-      msg: message,
-      toastLength: Toast.LENGTH_LONG,
-      gravity: ToastGravity.SNACKBAR,
-      backgroundColor: Colors.black,
-      textColor: Colors.white,
-      fontSize: 16.0,
-    );
-  }
-
-  void waitForWalletInstance(BuildContext context, Uri tempLaunchUri) {
+  void waitForWalletInstance(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.mounted) {
+      if (mounted) {
         _walletReactionDisposer = reaction(
-              (_) => widget.appStore.wallet,
-              (WalletBase? wallet) {
+          (_) => widget.appStore.wallet,
+          (WalletBase? wallet) {
             if (wallet != null) {
-              widget.navigatorKey.currentState?.pushNamed(
-                Routes.send,
-                arguments: PaymentRequest.fromUri(tempLaunchUri),
-              );
+              _navigateToDeepLinkScreen();
               _walletReactionDisposer?.call();
               _walletReactionDisposer = null;
             }
@@ -266,5 +234,9 @@ class RootState extends State<Root> with WidgetsBindingObserver {
         );
       }
     });
+  }
+
+  void _navigateToDeepLinkScreen() {
+    widget.linkViewModel.handleLink();
   }
 }

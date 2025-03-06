@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:cake_wallet/src/screens/base_page.dart';
 import 'package:cake_wallet/store/app_store.dart';
+import 'package:cw_core/utils/print_verbose.dart';
 import 'package:flutter/material.dart';
 // import 'package:tor/tor.dart';
 
@@ -57,7 +58,7 @@ class _TorPageBodyState extends State<TorPageBody> {
     // }
     // widget.appStore.wallet!.connectToNode(node: node);
 
-    print('Done awaiting; tor should be running');
+    printV('Done awaiting; tor should be running');
   }
 
   Future<void> endTor() async {
@@ -69,7 +70,7 @@ class _TorPageBodyState extends State<TorPageBody> {
   //     torEnabled = Tor.instance.enabled; // Update flag
   //   });
   //
-  //   print('Done awaiting; tor should be stopped');
+  //   printV('Done awaiting; tor should be stopped');
   }
   //
   // @override
@@ -146,7 +147,7 @@ class ConnectScreen extends StatelessWidget {
           ElevatedButton(
             onPressed: connect,
             style: ElevatedButton.styleFrom(
-              primary: Colors.blue,
+              // primary: Colors.blue,
               padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(30),
@@ -211,7 +212,7 @@ class DisconnectScreen extends StatelessWidget {
           ElevatedButton(
             onPressed: disconnect,
             style: ElevatedButton.styleFrom(
-              primary: Colors.red,
+              // primary: Colors.red,
               padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(30),

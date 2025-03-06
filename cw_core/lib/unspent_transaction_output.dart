@@ -1,4 +1,6 @@
-class Unspent {
+import 'package:cw_core/unspent_comparable_mixin.dart';
+
+class Unspent with UnspentComparable {
   Unspent(this.address, this.hash, this.value, this.vout, this.keyImage)
       : isSending = true,
         isFrozen = false,
@@ -14,7 +16,9 @@ class Unspent {
   bool isChange;
   bool isSending;
   bool isFrozen;
+  int? confirmations;
   String note;
 
-  bool get isP2wpkh => address.startsWith('bc') || address.startsWith('ltc');
+  bool get isP2wpkh =>
+      address.startsWith('bc') || address.startsWith('tb') || address.startsWith('ltc');
 }

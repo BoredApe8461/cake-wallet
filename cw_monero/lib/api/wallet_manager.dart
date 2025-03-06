@@ -1,109 +1,138 @@
 import 'dart:ffi';
+import 'dart:io';
+import 'dart:isolate';
 
-import 'package:cw_monero/api/convert_utf8_to_string.dart';
+import 'package:cw_core/utils/print_verbose.dart';
+import 'package:cw_monero/api/account_list.dart';
 import 'package:cw_monero/api/exceptions/wallet_creation_exception.dart';
 import 'package:cw_monero/api/exceptions/wallet_opening_exception.dart';
 import 'package:cw_monero/api/exceptions/wallet_restore_from_keys_exception.dart';
 import 'package:cw_monero/api/exceptions/wallet_restore_from_seed_exception.dart';
-import 'package:cw_monero/api/monero_api.dart';
-import 'package:cw_monero/api/signatures.dart';
-import 'package:cw_monero/api/types.dart';
+import 'package:cw_monero/api/transaction_history.dart';
 import 'package:cw_monero/api/wallet.dart';
-import 'package:ffi/ffi.dart';
-import 'package:flutter/foundation.dart';
+import 'package:cw_monero/ledger.dart';
+import 'package:monero/monero.dart' as monero;
 
-final createWalletNative = moneroApi
-    .lookup<NativeFunction<create_wallet>>('create_wallet')
-    .asFunction<CreateWallet>();
+class MoneroCException implements Exception {
+  final String message;
 
-final restoreWalletFromSeedNative = moneroApi
-    .lookup<NativeFunction<restore_wallet_from_seed>>(
-        'restore_wallet_from_seed')
-    .asFunction<RestoreWalletFromSeed>();
+  MoneroCException(this.message);
 
-final restoreWalletFromKeysNative = moneroApi
-    .lookup<NativeFunction<restore_wallet_from_keys>>(
-        'restore_wallet_from_keys')
-    .asFunction<RestoreWalletFromKeys>();
+  @override
+  String toString() => message;
+}
 
-final restoreWalletFromSpendKeyNative = moneroApi
-    .lookup<NativeFunction<restore_wallet_from_spend_key>>(
-    'restore_wallet_from_spend_key')
-    .asFunction<RestoreWalletFromSpendKey>();
+void checkIfMoneroCIsFine() {
+  final cppCsCpp = monero.MONERO_checksum_wallet2_api_c_cpp();
+  final cppCsH = monero.MONERO_checksum_wallet2_api_c_h();
+  final cppCsExp = monero.MONERO_checksum_wallet2_api_c_exp();
 
-final isWalletExistNative = moneroApi
-    .lookup<NativeFunction<is_wallet_exist>>('is_wallet_exist')
-    .asFunction<IsWalletExist>();
+  final dartCsCpp = monero.wallet2_api_c_cpp_sha256;
+  final dartCsH = monero.wallet2_api_c_h_sha256;
+  final dartCsExp = monero.wallet2_api_c_exp_sha256;
 
-final loadWalletNative = moneroApi
-    .lookup<NativeFunction<load_wallet>>('load_wallet')
-    .asFunction<LoadWallet>();
+  if (cppCsCpp != dartCsCpp) {
+    throw MoneroCException("monero_c and monero.dart cpp wrapper code mismatch.\nLogic errors can occur.\nRefusing to run in release mode.\ncpp: '$cppCsCpp'\ndart: '$dartCsCpp'");
+  }
 
-final errorStringNative = moneroApi
-    .lookup<NativeFunction<error_string>>('error_string')
-    .asFunction<ErrorString>();
+  if (cppCsH != dartCsH) {
+    throw MoneroCException("monero_c and monero.dart cpp wrapper header mismatch.\nLogic errors can occur.\nRefusing to run in release mode.\ncpp: '$cppCsH'\ndart: '$dartCsH'");
+  }
+
+  if (cppCsExp != dartCsExp && (Platform.isIOS || Platform.isMacOS)) {
+    throw MoneroCException("monero_c and monero.dart wrapper export list mismatch.\nLogic errors can occur.\nRefusing to run in release mode.\ncpp: '$cppCsExp'\ndart: '$dartCsExp'");
+  }
+}
+monero.WalletManager? _wmPtr;
+final monero.WalletManager wmPtr = Pointer.fromAddress((() {
+  try {
+    // Problems with the wallet? Crashes? Lags? this will print all calls to xmr
+    // codebase, so it will be easier to debug what happens. At least easier
+    // than plugging gdb in. Especially on windows/android.
+    monero.printStarts = false;
+    _wmPtr ??= monero.WalletManagerFactory_getWalletManager();
+    printV("ptr: $_wmPtr");
+  } catch (e) {
+    printV(e);
+    rethrow;
+  }
+  return _wmPtr!.address;
+})());
+
+void createWalletPointer() {
+  final newWptr = monero.WalletManager_createWallet(wmPtr,
+      path: "", password: "", language: "", networkType: 0);
+
+  wptr = newWptr;
+}
 
 void createWalletSync(
     {required String path,
-     required String password,
-     required String language,
-     int nettype = 0}) {
-  final pathPointer = path.toNativeUtf8();
-  final passwordPointer = password.toNativeUtf8();
-  final languagePointer = language.toNativeUtf8();
-  final errorMessagePointer = ''.toNativeUtf8();
-  final isWalletCreated = createWalletNative(pathPointer, passwordPointer,
-          languagePointer, nettype, errorMessagePointer) !=
-      0;
+    required String password,
+    required String language,
+    required String passphrase,
+    int nettype = 0}) {
+  txhistory = null;
+  final newWptr = monero.WalletManager_createWallet(wmPtr,
+      path: path, password: password, language: language, networkType: 0);
 
-  calloc.free(pathPointer);
-  calloc.free(passwordPointer);
-  calloc.free(languagePointer);
-
-  if (!isWalletCreated) {
-    throw WalletCreationException(
-        message: convertUTF8ToString(pointer: errorMessagePointer));
+  final status = monero.Wallet_status(newWptr);
+  if (status != 0) {
+    throw WalletCreationException(message: monero.Wallet_errorString(newWptr));
   }
+  wptr = newWptr;
+  monero.Wallet_setCacheAttribute(wptr!, key: "cakewallet.passphrase", value: passphrase);
+  monero.Wallet_store(wptr!, path: path);
+  openedWalletsByPath[path] = wptr!;
+  _lastOpenedWallet = path;
 
+  // is the line below needed?
   // setupNodeSync(address: "node.moneroworld.com:18089");
 }
 
 bool isWalletExistSync({required String path}) {
-  final pathPointer = path.toNativeUtf8();
-  final isExist = isWalletExistNative(pathPointer) != 0;
-
-  calloc.free(pathPointer);
-
-  return isExist;
+  return monero.WalletManager_walletExists(wmPtr, path);
 }
 
 void restoreWalletFromSeedSync(
     {required String path,
     required String password,
+    required String passphrase,
     required String seed,
     int nettype = 0,
     int restoreHeight = 0}) {
-  final pathPointer = path.toNativeUtf8();
-  final passwordPointer = password.toNativeUtf8();
-  final seedPointer = seed.toNativeUtf8();
-  final errorMessagePointer = ''.toNativeUtf8();
-  final isWalletRestored = restoreWalletFromSeedNative(
-          pathPointer,
-          passwordPointer,
-          seedPointer,
-          nettype,
-          restoreHeight,
-          errorMessagePointer) !=
-      0;
+  txhistory = null;
+  final newWptr = monero.WalletManager_recoveryWallet(
+    wmPtr,
+    path: path,
+    password: password,
+    mnemonic: seed,
+    restoreHeight: restoreHeight,
+    seedOffset: passphrase,
+    networkType: 0,
+  );
 
-  calloc.free(pathPointer);
-  calloc.free(passwordPointer);
-  calloc.free(seedPointer);
+  final status = monero.Wallet_status(newWptr);
 
-  if (!isWalletRestored) {
-    throw WalletRestoreFromSeedException(
-        message: convertUTF8ToString(pointer: errorMessagePointer));
+  if (status != 0) {
+    final error = monero.Wallet_errorString(newWptr);
+    if (error.contains('word list failed verification')) {
+      throw WalletRestoreFromSeedException(
+        message: "Seed verification failed, please make sure you entered the correct seed with the correct words order",
+      );
+    }
+    throw WalletRestoreFromSeedException(message: error);
   }
+  wptr = newWptr;
+
+  setRefreshFromBlockHeight(height: restoreHeight);
+
+  monero.Wallet_setCacheAttribute(wptr!, key: "cakewallet.passphrase", value: passphrase);
+
+  openedWalletsByPath[path] = wptr!;
+
+  monero.Wallet_store(wptr!);
+  _lastOpenedWallet = path;
 }
 
 void restoreWalletFromKeysSync(
@@ -115,89 +144,252 @@ void restoreWalletFromKeysSync(
     required String spendKey,
     int nettype = 0,
     int restoreHeight = 0}) {
-  final pathPointer = path.toNativeUtf8();
-  final passwordPointer = password.toNativeUtf8();
-  final languagePointer = language.toNativeUtf8();
-  final addressPointer = address.toNativeUtf8();
-  final viewKeyPointer = viewKey.toNativeUtf8();
-  final spendKeyPointer = spendKey.toNativeUtf8();
-  final errorMessagePointer = ''.toNativeUtf8();
-  final isWalletRestored = restoreWalletFromKeysNative(
-          pathPointer,
-          passwordPointer,
-          languagePointer,
-          addressPointer,
-          viewKeyPointer,
-          spendKeyPointer,
-          nettype,
-          restoreHeight,
-          errorMessagePointer) !=
-      0;
+  txhistory = null;
+  var newWptr = (spendKey != "")
+      ? monero.WalletManager_createDeterministicWalletFromSpendKey(wmPtr,
+          path: path,
+          password: password,
+          language: language,
+          spendKeyString: spendKey,
+          newWallet: true,
+          // TODO(mrcyjanek): safe to remove
+          restoreHeight: restoreHeight)
+      : monero.WalletManager_createWalletFromKeys(
+          wmPtr,
+          path: path,
+          password: password,
+          restoreHeight: restoreHeight,
+          addressString: address,
+          viewKeyString: viewKey,
+          spendKeyString: spendKey,
+          nettype: 0,
+        );
 
-  calloc.free(pathPointer);
-  calloc.free(passwordPointer);
-  calloc.free(languagePointer);
-  calloc.free(addressPointer);
-  calloc.free(viewKeyPointer);
-  calloc.free(spendKeyPointer);
-
-  if (!isWalletRestored) {
+  final status = monero.Wallet_status(newWptr);
+  if (status != 0) {
     throw WalletRestoreFromKeysException(
-        message: convertUTF8ToString(pointer: errorMessagePointer));
+        message: monero.Wallet_errorString(newWptr));
   }
+
+  // CW-712 - Try to restore deterministic wallet first, if the view key doesn't
+  // match the view key provided
+  if (spendKey != "") {
+    final viewKeyRestored = monero.Wallet_secretViewKey(newWptr);
+    if (viewKey != viewKeyRestored && viewKey != "") {
+      monero.WalletManager_closeWallet(wmPtr, newWptr, false);
+      File(path).deleteSync();
+      File(path + ".keys").deleteSync();
+      newWptr = monero.WalletManager_createWalletFromKeys(
+        wmPtr,
+        path: path,
+        password: password,
+        restoreHeight: restoreHeight,
+        addressString: address,
+        viewKeyString: viewKey,
+        spendKeyString: spendKey,
+        nettype: 0,
+      );
+      final status = monero.Wallet_status(newWptr);
+      if (status != 0) {
+        throw WalletRestoreFromKeysException(
+            message: monero.Wallet_errorString(newWptr));
+      }
+    }
+  }
+
+  wptr = newWptr;
+
+  openedWalletsByPath[path] = wptr!;
+  _lastOpenedWallet = path;
 }
+
+
+// English only, because normalization.
+void restoreWalletFromPolyseedWithOffset(
+    {required String path,
+    required String password,
+    required String seed,
+    required String seedOffset,
+    required String language,
+    int nettype = 0}) {
+
+  txhistory = null;
+  final newWptr = monero.WalletManager_createWalletFromPolyseed(
+    wmPtr,
+    path: path,
+    password: password,
+    networkType: nettype,
+    mnemonic: seed,
+    seedOffset: seedOffset,
+    newWallet: true, // safe to remove
+    restoreHeight: 0,
+    kdfRounds: 1,
+  );
+
+  final status = monero.Wallet_status(newWptr);
+
+  if (status != 0) {
+    final err = monero.Wallet_errorString(newWptr);
+    printV("err: $err");
+    throw WalletRestoreFromKeysException(message: err);
+  }
+
+  wptr = newWptr;
+
+  monero.Wallet_setCacheAttribute(wptr!, key: "cakewallet.seed", value: seed);
+  monero.Wallet_setCacheAttribute(wptr!, key: "cakewallet.passphrase", value: seedOffset);
+  monero.Wallet_store(wptr!);
+  storeSync();
+
+  openedWalletsByPath[path] = wptr!;
+}
+
 
 void restoreWalletFromSpendKeySync(
     {required String path,
-      required String password,
-      required String seed,
-      required String language,
-      required String spendKey,
-      int nettype = 0,
-      int restoreHeight = 0}) {
-  final pathPointer = path.toNativeUtf8();
-  final passwordPointer = password.toNativeUtf8();
-  final seedPointer = seed.toNativeUtf8();
-  final languagePointer = language.toNativeUtf8();
-  final spendKeyPointer = spendKey.toNativeUtf8();
-  final errorMessagePointer = ''.toNativeUtf8();
-  final isWalletRestored = restoreWalletFromSpendKeyNative(
-      pathPointer,
-      passwordPointer,
-      seedPointer,
-      languagePointer,
-      spendKeyPointer,
-      nettype,
-      restoreHeight,
-      errorMessagePointer) !=
-      0;
+    required String password,
+    required String seed,
+    required String language,
+    required String spendKey,
+    int nettype = 0,
+    int restoreHeight = 0}) {
+  // txhistory = null;
+  // wptr = monero.WalletManager_createWalletFromKeys(
+  //   wmPtr,
+  //   path: path,
+  //   password: password,
+  //   restoreHeight: restoreHeight,
+  //   addressString: '',
+  //   spendKeyString: spendKey,
+  //   viewKeyString: '',
+  //   nettype: 0,
+  // );
 
-  calloc.free(pathPointer);
-  calloc.free(passwordPointer);
-  calloc.free(languagePointer);
-  calloc.free(spendKeyPointer);
+  txhistory = null;
+  final newWptr = monero.WalletManager_createDeterministicWalletFromSpendKey(
+    wmPtr,
+    path: path,
+    password: password,
+    language: language,
+    spendKeyString: spendKey,
+    newWallet: true, // TODO(mrcyjanek): safe to remove
+    restoreHeight: restoreHeight,
+  );
+
+  final status = monero.Wallet_status(newWptr);
+
+  if (status != 0) {
+    final err = monero.Wallet_errorString(newWptr);
+    printV("err: $err");
+    throw WalletRestoreFromKeysException(message: err);
+  }
+
+  wptr = newWptr;
+
+  monero.Wallet_setCacheAttribute(wptr!, key: "cakewallet.seed", value: seed);
 
   storeSync();
 
-  if (!isWalletRestored) {
-    throw WalletRestoreFromKeysException(
-        message: convertUTF8ToString(pointer: errorMessagePointer));
-  }
+  openedWalletsByPath[path] = wptr!;
+  _lastOpenedWallet = path;
 }
 
-void loadWallet({
-  required String path,
-  required String password,
-  int nettype = 0}) {
-  final pathPointer = path.toNativeUtf8();
-  final passwordPointer = password.toNativeUtf8();
-  final loaded = loadWalletNative(pathPointer, passwordPointer, nettype) != 0;
-  calloc.free(pathPointer);
-  calloc.free(passwordPointer);
+String _lastOpenedWallet = "";
 
-  if (!loaded) {
-    throw WalletOpeningException(
-        message: convertUTF8ToString(pointer: errorStringNative()));
+Future<void> restoreWalletFromHardwareWallet(
+    {required String path,
+    required String password,
+    required String deviceName,
+    int nettype = 0,
+    int restoreHeight = 0}) async {
+  txhistory = null;
+
+  final newWptrAddr = await Isolate.run(() {
+    return monero.WalletManager_createWalletFromDevice(wmPtr,
+            path: path,
+            password: password,
+            restoreHeight: restoreHeight,
+            deviceName: deviceName)
+        .address;
+  });
+  final newWptr = Pointer<Void>.fromAddress(newWptrAddr);
+
+  final status = monero.Wallet_status(newWptr);
+
+  if (status != 0) {
+    final error = monero.Wallet_errorString(newWptr);
+    throw WalletRestoreFromSeedException(message: error);
+  }
+  wptr = newWptr;
+  _lastOpenedWallet = path;
+  openedWalletsByPath[path] = wptr!;
+}
+
+Map<String, monero.wallet> openedWalletsByPath = {};
+
+Future<void> loadWallet(
+    {required String path, required String password, int nettype = 0}) async {
+  if (openedWalletsByPath[path] != null) {
+    txhistory = null;
+    wptr = openedWalletsByPath[path]!;
+    return;
+  }
+  if (wptr == null || path != _lastOpenedWallet) {
+    if (wptr != null) {
+      final addr = wptr!.address;
+      Isolate.run(() {
+        monero.Wallet_store(Pointer.fromAddress(addr));
+      });
+    }
+    txhistory = null;
+
+    /// Get the device type
+    /// 0: Software Wallet
+    /// 1: Ledger
+    /// 2: Trezor
+    late final deviceType;
+
+    if (Platform.isAndroid || Platform.isIOS) {
+      deviceType = monero.WalletManager_queryWalletDevice(
+        wmPtr,
+        keysFileName: "$path.keys",
+        password: password,
+        kdfRounds: 1,
+      );
+      final status = monero.WalletManager_errorString(wmPtr);
+      if (status != "") {
+        printV("loadWallet:"+status);
+        throw WalletOpeningException(message: status);
+      }
+    } else {
+      deviceType = 0;
+    }
+
+    if (deviceType == 1) {
+      final dummyWPtr = wptr ??
+          monero.WalletManager_openWallet(wmPtr, path: '', password: '');
+      enableLedgerExchange(dummyWPtr, gLedger!);
+    }
+
+    final addr = wmPtr.address;
+    final newWptrAddr = await Isolate.run(() {
+      return monero.WalletManager_openWallet(Pointer.fromAddress(addr),
+              path: path, password: password)
+          .address;
+    });
+
+    final newWptr = Pointer<Void>.fromAddress(newWptrAddr);
+
+    final status = monero.Wallet_status(newWptr);
+    if (status != 0) {
+      final err = monero.Wallet_errorString(newWptr);
+      printV("loadWallet:"+err);
+      throw WalletOpeningException(message: err);
+    }
+
+    wptr = newWptr;
+    _lastOpenedWallet = path;
+    openedWalletsByPath[path] = wptr!;
   }
 }
 
@@ -205,18 +397,20 @@ void _createWallet(Map<String, dynamic> args) {
   final path = args['path'] as String;
   final password = args['password'] as String;
   final language = args['language'] as String;
+  final passphrase = args['passphrase'] as String;
 
-  createWalletSync(path: path, password: password, language: language);
+  createWalletSync(path: path, password: password, language: language, passphrase: passphrase);
 }
 
 void _restoreFromSeed(Map<String, dynamic> args) {
   final path = args['path'] as String;
   final password = args['password'] as String;
+  final passphrase = args['passphrase'] as String;
   final seed = args['seed'] as String;
   final restoreHeight = args['restoreHeight'] as int;
 
-  restoreWalletFromSeedSync(
-      path: path, password: password, seed: seed, restoreHeight: restoreHeight);
+  return restoreWalletFromSeedSync(
+      path: path, password: password, passphrase: passphrase, seed: seed, restoreHeight: restoreHeight);
 }
 
 void _restoreFromKeys(Map<String, dynamic> args) {
@@ -255,38 +449,45 @@ void _restoreFromSpendKey(Map<String, dynamic> args) {
       spendKey: spendKey);
 }
 
-Future<void> _openWallet(Map<String, String> args) async =>
-    loadWallet(path: args['path'] as String, password: args['password'] as String);
+Future<void> _openWallet(Map<String, String> args) async => loadWallet(
+    path: args['path'] as String, password: args['password'] as String);
 
 bool _isWalletExist(String path) => isWalletExistSync(path: path);
 
-void openWallet({required String path, required String password, int nettype = 0}) async =>
+Future<void> openWallet(
+        {required String path,
+        required String password,
+        int nettype = 0}) async =>
     loadWallet(path: path, password: password, nettype: nettype);
 
 Future<void> openWalletAsync(Map<String, String> args) async =>
-    compute(_openWallet, args);
+    _openWallet(args);
 
 Future<void> createWallet(
         {required String path,
         required String password,
         required String language,
+        required String passphrase,
         int nettype = 0}) async =>
-    compute(_createWallet, {
+    _createWallet({
       'path': path,
       'password': password,
       'language': language,
+      'passphrase': passphrase,
       'nettype': nettype
     });
 
-Future<void> restoreFromSeed(
+void restoreFromSeed(
         {required String path,
         required String password,
+        required String passphrase,
         required String seed,
         int nettype = 0,
-        int restoreHeight = 0}) async =>
-    compute<Map<String, Object>, void>(_restoreFromSeed, {
+        int restoreHeight = 0}) =>
+    _restoreFromSeed({
       'path': path,
       'password': password,
+      'passphrase': passphrase,
       'seed': seed,
       'nettype': nettype,
       'restoreHeight': restoreHeight
@@ -301,7 +502,7 @@ Future<void> restoreFromKeys(
         required String spendKey,
         int nettype = 0,
         int restoreHeight = 0}) async =>
-    compute<Map<String, Object>, void>(_restoreFromKeys, {
+    _restoreFromKeys({
       'path': path,
       'password': password,
       'language': language,
@@ -313,14 +514,14 @@ Future<void> restoreFromKeys(
     });
 
 Future<void> restoreFromSpendKey(
-    {required String path,
-      required String password,
-      required String seed,
-      required String language,
-      required String spendKey,
-      int nettype = 0,
-      int restoreHeight = 0}) async =>
-    compute<Map<String, Object>, void>(_restoreFromSpendKey, {
+        {required String path,
+        required String password,
+        required String seed,
+        required String language,
+        required String spendKey,
+        int nettype = 0,
+        int restoreHeight = 0}) async =>
+    _restoreFromSpendKey({
       'path': path,
       'password': password,
       'seed': seed,
@@ -330,4 +531,6 @@ Future<void> restoreFromSpendKey(
       'restoreHeight': restoreHeight
     });
 
-Future<bool> isWalletExist({required String path}) => compute(_isWalletExist, path);
+bool isWalletExist({required String path}) => _isWalletExist(path);
+
+bool isViewOnlyBySpendKey() => int.tryParse(monero.Wallet_secretSpendKey(wptr!)) == 0;

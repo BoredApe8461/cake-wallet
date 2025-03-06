@@ -3,18 +3,23 @@ import 'package:cake_wallet/view_model/dashboard/trade_list_item.dart';
 import 'package:cw_core/wallet_base.dart';
 import 'package:mobx/mobx.dart';
 
-part'trade_filter_store.g.dart';
+part 'trade_filter_store.g.dart';
 
 class TradeFilterStore = TradeFilterStoreBase with _$TradeFilterStore;
 
 abstract class TradeFilterStoreBase with Store {
-  TradeFilterStoreBase() : displayXMRTO = true,
+  TradeFilterStoreBase()
+      : displayXMRTO = true,
         displayChangeNow = true,
         displaySideShift = true,
         displayMorphToken = true,
         displaySimpleSwap = true,
         displayTrocador = true,
-        displayExolix = true;
+        displayExolix = true,
+        displayChainflip = true,
+        displayThorChain = true,
+        displayLetsExchange = true,
+        displayStealthEx = true;
 
   @observable
   bool displayXMRTO;
@@ -37,8 +42,29 @@ abstract class TradeFilterStoreBase with Store {
   @observable
   bool displayExolix;
 
+  @observable
+  bool displayChainflip;
+  
+  @observable
+  bool displayThorChain;
+
+  @observable
+  bool displayLetsExchange;
+
+  @observable
+  bool displayStealthEx;
+
   @computed
-  bool get displayAllTrades => displayChangeNow && displaySideShift && displaySimpleSwap && displayTrocador && displayExolix;
+  bool get displayAllTrades =>
+      displayChangeNow &&
+      displaySideShift &&
+      displaySimpleSwap &&
+      displayTrocador &&
+      displayExolix && 
+      displayChainflip &&
+      displayThorChain &&
+      displayLetsExchange &&
+      displayStealthEx;
 
   @action
   void toggleDisplayExchange(ExchangeProviderDescription provider) {
@@ -64,6 +90,18 @@ abstract class TradeFilterStoreBase with Store {
       case ExchangeProviderDescription.exolix:
         displayExolix = !displayExolix;
         break;
+      case ExchangeProviderDescription.chainflip:
+        displayChainflip = !displayChainflip;
+        break;
+      case ExchangeProviderDescription.thorChain:
+        displayThorChain = !displayThorChain;
+        break;
+      case ExchangeProviderDescription.letsExchange:
+        displayLetsExchange = !displayLetsExchange;
+        break;
+      case ExchangeProviderDescription.stealthEx:
+        displayStealthEx = !displayStealthEx;
+        break;
       case ExchangeProviderDescription.all:
         if (displayAllTrades) {
           displayChangeNow = false;
@@ -73,6 +111,10 @@ abstract class TradeFilterStoreBase with Store {
           displaySimpleSwap = false;
           displayTrocador = false;
           displayExolix = false;
+          displayChainflip = false;
+          displayThorChain = false;
+          displayLetsExchange = false;
+          displayStealthEx = false;
         } else {
           displayChangeNow = true;
           displaySideShift = true;
@@ -81,6 +123,10 @@ abstract class TradeFilterStoreBase with Store {
           displaySimpleSwap = true;
           displayTrocador = true;
           displayExolix = true;
+          displayChainflip = true;
+          displayThorChain = true;
+          displayLetsExchange = true;
+          displayStealthEx = true;
         }
         break;
     }
@@ -105,7 +151,14 @@ abstract class TradeFilterStoreBase with Store {
                 (displaySimpleSwap &&
                     item.trade.provider == ExchangeProviderDescription.simpleSwap) ||
                 (displayTrocador && item.trade.provider == ExchangeProviderDescription.trocador) ||
-                (displayExolix && item.trade.provider == ExchangeProviderDescription.exolix))
+                (displayExolix && item.trade.provider == ExchangeProviderDescription.exolix) ||
+                (displayChainflip &&
+                    item.trade.provider == ExchangeProviderDescription.chainflip) ||
+                (displayThorChain &&
+                    item.trade.provider == ExchangeProviderDescription.thorChain) ||
+                (displayLetsExchange &&
+                    item.trade.provider == ExchangeProviderDescription.letsExchange) ||
+                (displayStealthEx && item.trade.provider == ExchangeProviderDescription.stealthEx))
             .toList()
         : _trades;
   }

@@ -1,15 +1,26 @@
+import 'dart:convert';
+import 'dart:developer';
+
 import 'package:cake_wallet/core/fiat_conversion_service.dart';
+import 'package:cake_wallet/entities/erc20_token_info_explorers.dart';
 import 'package:cake_wallet/entities/fiat_api_mode.dart';
+import 'package:cake_wallet/entities/erc20_token_info_moralis.dart';
 import 'package:cake_wallet/entities/sort_balance_types.dart';
 import 'package:cake_wallet/ethereum/ethereum.dart';
 import 'package:cake_wallet/polygon/polygon.dart';
+import 'package:cake_wallet/reactions/wallet_connect.dart';
 import 'package:cake_wallet/solana/solana.dart';
 import 'package:cake_wallet/store/settings_store.dart';
+import 'package:cake_wallet/tron/tron.dart';
 import 'package:cake_wallet/view_model/dashboard/balance_view_model.dart';
+import 'package:cake_wallet/zano/zano.dart';
 import 'package:cw_core/crypto_currency.dart';
 import 'package:cw_core/erc20_token.dart';
+import 'package:cw_core/utils/print_verbose.dart';
 import 'package:cw_core/wallet_type.dart';
 import 'package:mobx/mobx.dart';
+import 'package:http/http.dart' as http;
+import 'package:cake_wallet/.secrets.g.dart' as secrets;
 
 part 'home_settings_view_model.g.dart';
 
@@ -17,7 +28,10 @@ class HomeSettingsViewModel = HomeSettingsViewModelBase with _$HomeSettingsViewM
 
 abstract class HomeSettingsViewModelBase with Store {
   HomeSettingsViewModelBase(this._settingsStore, this._balanceViewModel)
-      : tokens = ObservableSet<CryptoCurrency>() {
+      : tokens = ObservableSet<CryptoCurrency>(),
+        isAddingToken = false,
+        isDeletingToken = false,
+        isValidatingContractAddress = false {
     _updateTokensList();
   }
 
@@ -25,6 +39,17 @@ abstract class HomeSettingsViewModelBase with Store {
   final BalanceViewModel _balanceViewModel;
 
   final ObservableSet<CryptoCurrency> tokens;
+
+  WalletType get walletType => _balanceViewModel.wallet.type;
+
+  @observable
+  bool isAddingToken;
+
+  @observable
+  bool isDeletingToken;
+
+  @observable
+  bool isValidatingContractAddress;
 
   @observable
   String searchText = '';
@@ -44,37 +69,304 @@ abstract class HomeSettingsViewModelBase with Store {
   @action
   void setPinNativeToken(bool value) => _settingsStore.pinNativeTokenAtTop = value;
 
-  Future<void> addToken(CryptoCurrency token) async {
-    if (_balanceViewModel.wallet.type == WalletType.ethereum) {
-      await ethereum!.addErc20Token(_balanceViewModel.wallet, token);
-    }
+  @action
+  Future<void> addToken({
+    required String contractAddress,
+    required CryptoCurrency token,
+  }) async {
+    try {
+      isAddingToken = true;
+      if (_balanceViewModel.wallet.type == WalletType.ethereum) {
+        final erc20token = Erc20Token(
+          name: token.name,
+          symbol: token.title,
+          decimal: token.decimals,
+          contractAddress: contractAddress,
+          iconPath: token.iconPath,
+        );
 
-    if (_balanceViewModel.wallet.type == WalletType.polygon) {
-      await polygon!.addErc20Token(_balanceViewModel.wallet, token);
-    }
+        await ethereum!.addErc20Token(_balanceViewModel.wallet, erc20token);
+      }
 
-    if (_balanceViewModel.wallet.type == WalletType.solana) {
-      await solana!.addSPLToken(_balanceViewModel.wallet, token);
-    }
+      if (_balanceViewModel.wallet.type == WalletType.polygon) {
+        final polygonToken = Erc20Token(
+          name: token.name,
+          symbol: token.title,
+          decimal: token.decimals,
+          contractAddress: contractAddress,
+          iconPath: token.iconPath,
+        );
+        await polygon!.addErc20Token(_balanceViewModel.wallet, polygonToken);
+      }
 
-    _updateTokensList();
-    _updateFiatPrices(token);
+      if (_balanceViewModel.wallet.type == WalletType.solana) {
+        await solana!.addSPLToken(
+          _balanceViewModel.wallet,
+          token,
+          contractAddress,
+        );
+      }
+
+      if (_balanceViewModel.wallet.type == WalletType.tron) {
+        await tron!.addTronToken(_balanceViewModel.wallet, token, contractAddress);
+      }
+
+      if (_balanceViewModel.wallet.type == WalletType.zano) {
+        await zano!.addZanoAssetById(_balanceViewModel.wallet, contractAddress);
+      }
+
+      _updateTokensList();
+      _updateFiatPrices(token);
+    } catch (e) {
+      throw e;
+    } finally {
+      isAddingToken = false;
+    }
   }
 
+  @action
   Future<void> deleteToken(CryptoCurrency token) async {
-    if (_balanceViewModel.wallet.type == WalletType.ethereum) {
-      await ethereum!.deleteErc20Token(_balanceViewModel.wallet, token as Erc20Token);
+    try {
+      isDeletingToken = true;
+      if (_balanceViewModel.wallet.type == WalletType.ethereum) {
+        await ethereum!.deleteErc20Token(_balanceViewModel.wallet, token as Erc20Token);
+      }
+
+      if (_balanceViewModel.wallet.type == WalletType.polygon) {
+        await polygon!.deleteErc20Token(_balanceViewModel.wallet, token as Erc20Token);
+      }
+
+      if (_balanceViewModel.wallet.type == WalletType.solana) {
+        await solana!.deleteSPLToken(_balanceViewModel.wallet, token);
+      }
+
+      if (_balanceViewModel.wallet.type == WalletType.tron) {
+        await tron!.deleteTronToken(_balanceViewModel.wallet, token);
+      }
+      if (_balanceViewModel.wallet.type == WalletType.zano) {
+        await zano!.deleteZanoAsset(_balanceViewModel.wallet, token);
+      }
+      _updateTokensList();
+    } finally {
+      isDeletingToken = false;
+    }
+  }
+
+  Future<bool> checkIfERC20TokenContractAddressIsAPotentialScamAddress(
+    String contractAddress,
+  ) async {
+    try {
+      isValidatingContractAddress = true;
+
+      if (!isEVMCompatibleChain(_balanceViewModel.wallet.type)) {
+        return false;
+      }
+
+      bool isEthereum = _balanceViewModel.wallet.type == WalletType.ethereum;
+
+      bool isPotentialScamViaMoralis = await _isPotentialScamTokenViaMoralis(
+        contractAddress,
+        isEthereum ? 'eth' : 'polygon',
+      );
+
+      bool isPotentialScamViaExplorers = await _isPotentialScamTokenViaExplorers(
+        contractAddress,
+        isEthereum: isEthereum,
+      );
+
+      bool isUnverifiedContract = await _isContractUnverified(
+        contractAddress,
+        isEthereum: isEthereum,
+      );
+
+      final showWarningForContractAddress =
+          isPotentialScamViaMoralis || isUnverifiedContract || isPotentialScamViaExplorers;
+
+      return showWarningForContractAddress;
+    } finally {
+      isValidatingContractAddress = false;
+    }
+  }
+
+  bool checkIfTokenIsWhitelisted(String contractAddress) {
+    // get the default tokens for each currency type:
+    List<String> defaultTokenAddresses = [];
+    switch (_balanceViewModel.wallet.type) {
+      case WalletType.ethereum:
+        defaultTokenAddresses = ethereum!.getDefaultTokenContractAddresses();
+        break;
+      case WalletType.polygon:
+        defaultTokenAddresses = polygon!.getDefaultTokenContractAddresses();
+        break;
+      case WalletType.solana:
+        defaultTokenAddresses = solana!.getDefaultTokenContractAddresses();
+        break;
+      case WalletType.tron:
+        defaultTokenAddresses = tron!.getDefaultTokenContractAddresses();
+        break;
+      case WalletType.zano:
+      case WalletType.banano:
+      case WalletType.monero:
+      case WalletType.none:
+      case WalletType.bitcoin:
+      case WalletType.litecoin:
+      case WalletType.haven:
+      case WalletType.nano:
+      case WalletType.wownero:
+      case WalletType.bitcoinCash:
+        return false;
     }
 
-    if (_balanceViewModel.wallet.type == WalletType.polygon) {
-      await polygon!.deleteErc20Token(_balanceViewModel.wallet, token as Erc20Token);
-    }
+    // check if the contractAddress is in the defaultTokenAddresses
+    bool isInWhitelist = defaultTokenAddresses.any((element) => element == contractAddress);
+    return isInWhitelist;
+  }
 
-    if (_balanceViewModel.wallet.type == WalletType.solana) {
-      await solana!.deleteSPLToken(_balanceViewModel.wallet, token);
-    }
+  Future<bool> _isPotentialScamTokenViaMoralis(
+    String contractAddress,
+    String chainName,
+  ) async {
+    final uri = Uri.https(
+      'deep-index.moralis.io',
+      '/api/v2.2/erc20/metadata',
+      {
+        "chain": chainName,
+        "addresses": contractAddress,
+      },
+    );
 
-    _updateTokensList();
+    try {
+      final response = await http.get(
+        uri,
+        headers: {
+          "Accept": "application/json",
+          "X-API-Key": secrets.moralisApiKey,
+        },
+      );
+
+      final decodedResponse = jsonDecode(response.body);
+
+      final tokenInfo = Erc20TokenInfoMoralis.fromJson(decodedResponse[0] as Map<String, dynamic>);
+
+      // Based on analysis using Moralis internal metrics
+      if (tokenInfo.possibleSpam == true) {
+        return true;
+      }
+
+      // Tokens whose contract have not been verified are potentially risky tokens.
+      if (tokenInfo.verifiedContract == false) {
+        return true;
+      }
+
+      // Tokens with a security score less than 40 are potentially risky, requiring caution when dealing with them.
+      if (tokenInfo.securityScore == null || tokenInfo.securityScore! < 40) {
+        return true;
+      }
+
+      // Absence of a website URL for an ERC-20 token can be a potential red flag. A legitimate ERC-20 projects should have a well-maintained website that provides information about the token, its purpose, team, and roadmap.
+      if (tokenInfo.links?.website == null || tokenInfo.links!.website!.isEmpty) {
+        return true;
+      }
+
+      // Having a Fully Diluted Valiuation of 0 is a significant red flag that could signify:
+      // - An abandoned/unlaunched project
+      // - Incorrect/missing token data
+      // - Suspicious manipulation of token data
+      if (tokenInfo.fullyDilutedValuation == '0') {
+        return true;
+      }
+
+      // I mean, a logo is the most basic of all the potential causes, but why does your fully functional project not have a logo?
+      if (tokenInfo.logo == null) {
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      printV('Error while checking scam via moralis: ${e.toString()}');
+      return true;
+    }
+  }
+
+  Future<bool> _isPotentialScamTokenViaExplorers(
+    String contractAddress, {
+    required bool isEthereum,
+  }) async {
+    final uri = Uri.https(
+      isEthereum ? "api.etherscan.io" : "api.polygonscan.com",
+      "/api",
+      {
+        "module": "token",
+        "action": "tokeninfo",
+        "contractaddress": contractAddress,
+        "apikey": isEthereum ? secrets.etherScanApiKey : secrets.polygonScanApiKey,
+      },
+    );
+
+    try {
+      final response = await http.get(uri);
+
+      final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (decodedResponse['status'] != '1') {
+        log('${response.body}\n');
+        log('${decodedResponse['result']}\n');
+        return true;
+      }
+
+      final tokenInfo =
+          Erc20TokenInfoExplorers.fromJson(decodedResponse['result'][0] as Map<String, dynamic>);
+
+      // A token without a website is a potential red flag
+      if (tokenInfo.website?.isEmpty == true) {
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      printV('Error while checking scam via explorers: ${e.toString()}');
+      return true;
+    }
+  }
+
+  Future<bool> _isContractUnverified(
+    String contractAddress, {
+    required bool isEthereum,
+  }) async {
+    final uri = Uri.https(
+      isEthereum ? "api.etherscan.io" : "api.polygonscan.com",
+      "/api",
+      {
+        "module": "contract",
+        "action": "getsourcecode",
+        "address": contractAddress,
+        "apikey": isEthereum ? secrets.etherScanApiKey : secrets.polygonScanApiKey,
+      },
+    );
+
+    try {
+      final response = await http.get(uri);
+
+      final decodedResponse = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (decodedResponse['status'] == '0') {
+        printV('${response.body}\n');
+        printV('${decodedResponse['result']}\n');
+        return true;
+      }
+
+      if (decodedResponse['status'] == '1' &&
+          decodedResponse['result'][0]['ABI'] == 'Contract source code not verified') {
+        printV('Call is valid but contract is not verified');
+        return true; // Contract is not verified
+      } else {
+        printV('Call is valid and contract is verified');
+        return false; // Contract is verified
+      }
+    } catch (e) {
+      printV('Error while checking contract verification: ${e.toString()}');
+      return true;
+    }
   }
 
   Future<CryptoCurrency?> getToken(String contractAddress) async {
@@ -90,12 +382,21 @@ abstract class HomeSettingsViewModelBase with Store {
       return await solana!.getSPLToken(_balanceViewModel.wallet, contractAddress);
     }
 
+    if (_balanceViewModel.wallet.type == WalletType.tron) {
+      return await tron!.getTronToken(_balanceViewModel.wallet, contractAddress);
+    }
+
+    if (_balanceViewModel.wallet.type == WalletType.zano) {
+      return await zano!.getZanoAsset(_balanceViewModel.wallet, contractAddress);
+    }
+
     return null;
   }
 
   CryptoCurrency get nativeToken => _balanceViewModel.wallet.currency;
 
   void _updateFiatPrices(CryptoCurrency token) async {
+    if (token.isPotentialScam) return; // don't fetch price data for potential scam tokens
     try {
       _balanceViewModel.fiatConvertationStore.prices[token] =
           await FiatConversionService.fetchPrice(
@@ -110,14 +411,26 @@ abstract class HomeSettingsViewModelBase with Store {
 
     if (_balanceViewModel.wallet.type == WalletType.ethereum) {
       ethereum!.addErc20Token(_balanceViewModel.wallet, token as Erc20Token);
+      if (!value) ethereum!.removeTokenTransactionsInHistory(_balanceViewModel.wallet, token);
     }
 
     if (_balanceViewModel.wallet.type == WalletType.polygon) {
       polygon!.addErc20Token(_balanceViewModel.wallet, token as Erc20Token);
+      if (!value) polygon!.removeTokenTransactionsInHistory(_balanceViewModel.wallet, token);
     }
 
     if (_balanceViewModel.wallet.type == WalletType.solana) {
-      solana!.addSPLToken(_balanceViewModel.wallet, token);
+      final address = solana!.getTokenAddress(token);
+      solana!.addSPLToken(_balanceViewModel.wallet, token, address);
+    }
+
+    if (_balanceViewModel.wallet.type == WalletType.tron) {
+      final address = tron!.getTokenAddress(token);
+      tron!.addTronToken(_balanceViewModel.wallet, token, address);
+    }
+
+    if (_balanceViewModel.wallet.type == WalletType.zano) {
+      await zano!.changeZanoAssetAvailability(_balanceViewModel.wallet, token);
     }
 
     _refreshTokensList();
@@ -166,6 +479,22 @@ abstract class HomeSettingsViewModelBase with Store {
           .toList()
         ..sort(_sortFunc));
     }
+
+    if (_balanceViewModel.wallet.type == WalletType.tron) {
+      tokens.addAll(tron!
+          .getTronTokenCurrencies(_balanceViewModel.wallet)
+          .where((element) => _matchesSearchText(element))
+          .toList()
+        ..sort(_sortFunc));
+    }
+
+    if (_balanceViewModel.wallet.type == WalletType.zano) {
+      tokens.addAll(zano!
+          .getZanoAssets(_balanceViewModel.wallet)
+          .where((element) => _matchesSearchText(element))
+          .toList()
+        ..sort(_sortFunc));
+    }
   }
 
   @action
@@ -184,7 +513,7 @@ abstract class HomeSettingsViewModelBase with Store {
   bool _matchesSearchText(CryptoCurrency asset) {
     final address = getTokenAddressBasedOnWallet(asset);
 
-    // The homes settings would only be displayed for either of Ethereum, Polygon or Solana Wallets.
+    // The homes settings would only be displayed for either of Tron, Ethereum, Polygon or Solana Wallets.
     if (address == null) return false;
 
     return searchText.isEmpty ||
@@ -194,6 +523,10 @@ abstract class HomeSettingsViewModelBase with Store {
   }
 
   String? getTokenAddressBasedOnWallet(CryptoCurrency asset) {
+    if (_balanceViewModel.wallet.type == WalletType.tron) {
+      return tron!.getTokenAddress(asset);
+    }
+
     if (_balanceViewModel.wallet.type == WalletType.solana) {
       return solana!.getTokenAddress(asset);
     }
@@ -206,7 +539,11 @@ abstract class HomeSettingsViewModelBase with Store {
       return polygon!.getTokenAddress(asset);
     }
 
-    // We return null if it's neither Polygin, Ethereum or Solana wallet (which is actually impossible because we only display home settings for either of these three wallets).
+    if (_balanceViewModel.wallet.type == WalletType.zano) {
+      return zano!.getZanoAssetAddress(asset);
+    }
+
+    // We return null if it's neither Tron, Polygon, Ethereum or Solana wallet (which is actually impossible because we only display home settings for either of these three wallets).
     return null;
   }
 }
